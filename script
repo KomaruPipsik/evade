@@ -769,7 +769,7 @@ do
 	recDesc.TextColor3 = Color3.fromRGB(120,125,140)
 	recDesc.TextSize = 10
 	recDesc.Font = Enum.Font.Gotham
-	recDesc.Text = "B — начать/остановить запись   |   V — воспроизвести"
+	recDesc.Text = "V — начать/остановить запись   |   B — воспроизвести"
 	recDesc.TextXAlignment = Enum.TextXAlignment.Left
 	recDesc.Parent = recRow
 
@@ -794,14 +794,14 @@ do
 				RecordedFrames = {}
 				recStatus.TextColor3 = Color3.fromRGB(200,80,80)
 				recStatus.Text = "⏺ Идёт запись..."
-				notify("Запись начата (G — остановить)")
+				notify("Запись начата (V — остановить)")
 			else
 				-- конец записи
 				State.Recording = false
 				State.HasRecord = true
 				recStatus.TextColor3 = Color3.fromRGB(100,200,100)
 				recStatus.Text = "✔ Запись сохранена (" .. #RecordedFrames .. " кадров)"
-				notify("Запись сохранена! F — воспроизвести")
+				notify("Запись сохранена! B — воспроизвести")
 			end
 		end
 		if input.KeyCode == ReplayKeybind and State.HasRecord and not ReplayActive then
@@ -938,7 +938,7 @@ do
 	makeInfoCard(f, "Bunny Hop",
 		"Автоматически прыгает каждый раз, когда персонаж касается земли — для быстрого передвижения.")
 	makeInfoCard(f, "Ghost Replay",
-		"G — начать запись движений. B снова — остановить. V — воспроизвести записанные движения. Камера не затрагивается.")
+		"V — начать запись движений. V снова — остановить. B — воспроизвести записанные движения. Камера не затрагивается.")
 	makeSection(f, "Визуал")
 	makeInfoCard(f, "Fullbright",
 		"Убирает тени и темноту, увеличивает яркость освещения до максимума.")
@@ -959,6 +959,16 @@ end
 -- ┌─────────────────────────────────────────────────────────────┐
 -- │                    ОСНОВНОЙ LOOP                            │
 -- └─────────────────────────────────────────────────────────────┘
+
+-- Добавленный блок для клавиатуры (Caps Lock)
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.CapsLock then
+		State.AutoJump = not State.AutoJump
+		notify(State.AutoJump and "Авто-прыжок: ВКЛ (CapsLock)" or "Авто-прыжок: ВЫКЛ (CapsLock)")
+	end
+end)
+
 local lastPos = nil
 local spinAngle = 0
 local fakelagTimer = 0
