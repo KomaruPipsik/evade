@@ -1,1021 +1,1077 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║           ADMIN PANEL — Roblox Studio LocalScript           ║
--- ║   Вставить в: StarterPlayer > StarterPlayerScripts          ║
+-- ║        ADMIN PANEL v4 — Roblox Studio LocalScript           ║
+-- ║   StarterPlayer › StarterPlayerScripts                      ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local TweenService     = game:GetService("TweenService")
+local Lighting         = game:GetService("Lighting")
 
-local Player = Players.LocalPlayer
+local Player    = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local RootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid  = Character:WaitForChild("Humanoid")
+local RootPart  = Character:WaitForChild("HumanoidRootPart")
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                     НАСТРОЙКИ                               │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  CONFIG
+-- ══════════════════════════════════════════
 local CONFIG = {
-	-- Прыжок у пола (функция 1)
 	AutoJumpHeight    = 16,
 	AutoJumpDefault   = 16,
-	AutoJumpThreshold = 4,   -- высота от земли для срабатывания
-	-- Высокий прыжок (функция 2)
+	AutoJumpThreshold = 4,
 	HighJumpPower     = 120,
 	HighJumpDefault   = 120,
-	-- Speed Hack (функция 5)
 	WalkSpeed         = 50,
 	WalkSpeedDefault  = 16,
-	-- FOV
 	FOV               = 70,
 	FOVDefault        = 70,
+	ShowStatusOverlay = true,
 }
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                   СОСТОЯНИЯ ФУНКЦИЙ                         │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  STATE
+-- ══════════════════════════════════════════
 local State = {
 	AutoJump     = false,
 	HighJump     = false,
 	SpeedHack    = false,
 	InfiniteJump = false,
+	BunnyHop     = false,
 	Fullbright   = false,
 	FOVChanged   = false,
-	BunnyHop     = false,
-	-- ESP
 	PlayerESP    = false,
 	BotESP       = false,
 	DistanceESP  = false,
-	-- Rainbow / Spin / FakeLag
 	RainbowTrail = false,
 	Spinbot      = false,
 	FakeLag      = false,
-	-- Ghost record/replay
 	Recording    = false,
 	HasRecord    = false,
 }
 
-local RecordedFrames  = {}
-local ReplayActive    = false
-local ReplayKeybind   = Enum.KeyCode.B
-local RecordKeybind   = Enum.KeyCode.V
-local ReplayBindSet   = false
+local RecordedFrames = {}
+local ReplayActive   = false
+local RecordKeybind  = Enum.KeyCode.V
+local ReplayKeybind  = Enum.KeyCode.B
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                    ВСПОМОГАТЕЛЬНЫЕ                          │
--- └─────────────────────────────────────────────────────────────┘
-local function tween(obj, props, t)
-	TweenService:Create(obj, TweenInfo.new(t or 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+-- ══════════════════════════════════════════
+--  HELPERS
+-- ══════════════════════════════════════════
+local function tw(obj, props, t, style, dir)
+	TweenService:Create(obj,
+		TweenInfo.new(t or 0.22,
+			style or Enum.EasingStyle.Quad,
+			dir   or Enum.EasingDirection.Out),
+		props):Play()
 end
 
-local function notify(text)
+local function getChar() return Player.Character end
+
+-- Уведомления (правый нижний угол)
+local function notify(text, color)
+	color = color or Color3.fromRGB(70, 140, 255)
 	local sg = Instance.new("ScreenGui")
-	sg.Name = "Notif"
-	sg.ResetOnSpawn = false
-	sg.Parent = Player.PlayerGui
+	sg.Name = "_Notif"; sg.ResetOnSpawn = false; sg.Parent = Player.PlayerGui
 
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0,280,0,48)
-	frame.Position = UDim2.new(1,10,1,-70)
-	frame.BackgroundColor3 = Color3.fromRGB(30,30,35)
-	frame.BorderSizePixel = 0
-	frame.Parent = sg
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(0, 260, 0, 44)
+	f.Position = UDim2.new(1, 10, 1, -58)
+	f.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
+	f.BorderSizePixel = 0; f.Parent = sg
+	local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0,8)
-	corner.Parent = frame
-
+	-- цветная левая полоса
 	local bar = Instance.new("Frame")
-	bar.Size = UDim2.new(0,4,1,0)
-	bar.BackgroundColor3 = Color3.fromRGB(100,180,255)
-	bar.BorderSizePixel = 0
-	bar.Parent = frame
+	bar.Size = UDim2.new(0, 3, 1, -8); bar.Position = UDim2.new(0, 0, 0, 4)
+	bar.BackgroundColor3 = color; bar.BorderSizePixel = 0; bar.Parent = f
 	Instance.new("UICorner").Parent = bar
 
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1,-14,1,0)
-	lbl.Position = UDim2.new(0,12,0,0)
-	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(220,220,230)
-	lbl.TextSize = 14
-	lbl.Font = Enum.Font.GothamSemibold
-	lbl.Text = text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
+	-- иконка
+	local ico = Instance.new("TextLabel")
+	ico.Size = UDim2.new(0, 20, 1, 0); ico.Position = UDim2.new(0, 7, 0, 0)
+	ico.BackgroundTransparency = 1; ico.Text = "●"
+	ico.TextColor3 = color; ico.TextSize = 10; ico.Font = Enum.Font.GothamBold
+	ico.Parent = f
 
-	tween(frame, {Position = UDim2.new(1,-295,1,-70)}, 0.3)
-	task.delay(2.8, function()
-		tween(frame, {Position = UDim2.new(1,10,1,-70)}, 0.3)
-		task.delay(0.35, function() sg:Destroy() end)
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -32, 1, 0); lbl.Position = UDim2.new(0, 30, 0, 0)
+	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(205, 210, 228)
+	lbl.TextSize = 12; lbl.Font = Enum.Font.GothamSemibold
+	lbl.Text = text; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = f
+
+	tw(f, {Position = UDim2.new(1, -275, 1, -58)}, 0.28, Enum.EasingStyle.Back)
+	task.delay(2.5, function()
+		tw(f, {Position = UDim2.new(1, 10, 1, -58)}, 0.22)
+		task.delay(0.25, function() sg:Destroy() end)
 	end)
 end
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                    ПОСТРОЕНИЕ GUI                           │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  SCREEN GUI
+-- ══════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AdminPanelGUI"
+ScreenGui.Name = "AdminPanelGUI_v4"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = Player.PlayerGui
 
--- Главное окно
+-- ══════════════════════════════════════════
+--  ГЛАВНОЕ ОКНО  (500 × 400)
+-- ══════════════════════════════════════════
+local WINW, WINH = 500, 400
+
 local Main = Instance.new("Frame")
 Main.Name = "Main"
-Main.Size = UDim2.new(0,520,0,420)
-Main.Position = UDim2.new(0.5,-260,0.5,-210)
-Main.BackgroundColor3 = Color3.fromRGB(18,18,22)
-Main.BorderSizePixel = 0
-Main.Active = true
-Main.Draggable = true
-Main.Parent = ScreenGui
+Main.Size = UDim2.new(0, WINW, 0, WINH)
+Main.Position = UDim2.new(0.5, -WINW/2, 0.5, -WINH/2)
+Main.BackgroundColor3 = Color3.fromRGB(13, 13, 18)
+Main.BorderSizePixel = 0; Main.Active = true; Main.Draggable = true
+Main.ClipsDescendants = false; Main.Parent = ScreenGui
+Instance.new("UICorner").Parent = Main
 
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0,12)
-mainCorner.Parent = Main
-
--- Полоска-акцент сверху
-local accent = Instance.new("Frame")
-accent.Size = UDim2.new(1,0,0,3)
-accent.BackgroundColor3 = Color3.fromRGB(100,180,255)
-accent.BorderSizePixel = 0
-accent.ZIndex = 5
-accent.Parent = Main
-local accentGrad = Instance.new("UIGradient")
-accentGrad.Color = ColorSequence.new{
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(80,140,255)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(140,80,255))
-}
-accentGrad.Parent = accent
-
--- Тень (имитация)
-local shadow = Instance.new("Frame")
-shadow.Size = UDim2.new(1,20,1,20)
-shadow.Position = UDim2.new(0,-10,0,6)
-shadow.BackgroundColor3 = Color3.fromRGB(0,0,0)
-shadow.BackgroundTransparency = 0.6
-shadow.BorderSizePixel = 0
+-- Тень
+local shadow = Instance.new("ImageLabel")
+shadow.Name = "Shadow"
+shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+shadow.BackgroundTransparency = 1
+shadow.Position = UDim2.new(0.5, 0, 0.5, 8)
+shadow.Size = UDim2.new(1, 40, 1, 40)
 shadow.ZIndex = 0
+shadow.Image = "rbxassetid://6015897843"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.5
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(49, 49, 450, 450)
 shadow.Parent = Main
-Instance.new("UICorner").Parent = shadow
 
--- Заголовок
+-- Анимированная полоска-градиент сверху
+local accentBar = Instance.new("Frame")
+accentBar.Size = UDim2.new(1, 0, 0, 3)
+accentBar.BackgroundColor3 = Color3.fromRGB(60, 120, 255)
+accentBar.BorderSizePixel = 0; accentBar.ZIndex = 10; accentBar.Parent = Main
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 12); c.Parent = accentBar
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0,   Color3.fromRGB(50, 110, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 60, 255)),
+		ColorSequenceKeypoint.new(1,   Color3.fromRGB(50, 200, 255)),
+	}; g.Parent = accentBar
+	task.spawn(function()
+		local rot = 0
+		while Main.Parent do
+			rot = (rot + 1) % 360; g.Rotation = rot; task.wait(0.04)
+		end
+	end)
+end
+
+-- ─── Title bar ───────────────────────────
 local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1,0,0,40)
-titleBar.BackgroundColor3 = Color3.fromRGB(22,22,28)
-titleBar.BorderSizePixel = 0
-titleBar.ZIndex = 2
-titleBar.Parent = Main
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.Position = UDim2.new(0, 0, 0, 3)
+titleBar.BackgroundColor3 = Color3.fromRGB(17, 17, 23)
+titleBar.BorderSizePixel = 0; titleBar.ZIndex = 5; titleBar.Parent = Main
 
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1,-50,1,0)
-titleLabel.Position = UDim2.new(0,14,0,0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.TextColor3 = Color3.fromRGB(220,225,240)
-titleLabel.TextSize = 15
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.Text = "⚙  Admin Panel"
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.ZIndex = 3
-titleLabel.Parent = titleBar
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Size = UDim2.new(1, -80, 1, 0); titleLbl.Position = UDim2.new(0, 14, 0, 0)
+titleLbl.BackgroundTransparency = 1; titleLbl.TextColor3 = Color3.fromRGB(200, 205, 225)
+titleLbl.TextSize = 13; titleLbl.Font = Enum.Font.GothamBold
+titleLbl.Text = "⚙  Admin Panel"; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+titleLbl.ZIndex = 6; titleLbl.Parent = titleBar
 
--- Кнопка закрыть
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0,28,0,28)
-closeBtn.Position = UDim2.new(1,-36,0.5,-14)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200,80,80)
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-closeBtn.TextSize = 13
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.BorderSizePixel = 0
-closeBtn.ZIndex = 4
-closeBtn.Parent = titleBar
-Instance.new("UICorner").Parent = closeBtn
+-- Minimize / Close
+local function makeWinBtn(xOff, bg, icon)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 22, 0, 22); b.Position = UDim2.new(1, xOff, 0.5, -11)
+	b.BackgroundColor3 = bg; b.Text = icon
+	b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 11
+	b.Font = Enum.Font.GothamBold; b.BorderSizePixel = 0
+	b.AutoButtonColor = false; b.ZIndex = 7; b.Parent = titleBar
+	Instance.new("UICorner").Parent = b
+	b.MouseEnter:Connect(function() tw(b, {BackgroundTransparency = 0.35}, 0.1) end)
+	b.MouseLeave:Connect(function() tw(b, {BackgroundTransparency = 0}, 0.1) end)
+	return b
+end
 
-closeBtn.MouseButton1Click:Connect(function()
-	tween(Main, {Size = UDim2.new(0,520,0,0), Position = UDim2.new(0.5,-260,0.5,0)}, 0.25)
-	task.delay(0.28, function() Main.Visible = false end)
+local minBtn   = makeWinBtn(-56, Color3.fromRGB(50, 54, 78), "−")
+local closeBtn = makeWinBtn(-30, Color3.fromRGB(180, 55, 55), "✕")
+
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	tw(Main, {Size = UDim2.new(0, WINW, 0, minimized and 39 or WINH)}, 0.24, Enum.EasingStyle.Quart)
+	minBtn.Text = minimized and "□" or "−"
 end)
 
--- Кнопка «показать» (после закрытия)
 local showBtn = Instance.new("TextButton")
-showBtn.Size = UDim2.new(0,110,0,32)
-showBtn.Position = UDim2.new(0,10,0,10)
-showBtn.BackgroundColor3 = Color3.fromRGB(28,28,35)
-showBtn.Text = "⚙ Admin Panel"
-showBtn.TextColor3 = Color3.fromRGB(180,200,255)
-showBtn.TextSize = 13
-showBtn.Font = Enum.Font.GothamBold
-showBtn.BorderSizePixel = 0
-showBtn.ZIndex = 10
-showBtn.Visible = false
-showBtn.Parent = ScreenGui
+showBtn.Size = UDim2.new(0, 100, 0, 26); showBtn.Position = UDim2.new(0, 10, 0, 10)
+showBtn.BackgroundColor3 = Color3.fromRGB(17, 17, 23); showBtn.Text = "⚙ Admin Panel"
+showBtn.TextColor3 = Color3.fromRGB(130, 170, 255); showBtn.TextSize = 11
+showBtn.Font = Enum.Font.GothamBold; showBtn.BorderSizePixel = 0
+showBtn.ZIndex = 20; showBtn.Visible = false; showBtn.Parent = ScreenGui
 Instance.new("UICorner").Parent = showBtn
 
-closeBtn.MouseButton1Click:Connect(function() showBtn.Visible = true end)
+closeBtn.MouseButton1Click:Connect(function()
+	tw(Main, {Size = UDim2.new(0, WINW, 0, 0), Position = UDim2.new(0.5, -WINW/2, 0.5, 0)}, 0.22)
+	task.delay(0.25, function() Main.Visible = false; showBtn.Visible = true end)
+end)
 showBtn.MouseButton1Click:Connect(function()
-	showBtn.Visible = false
-	Main.Visible = true
-	Main.Size = UDim2.new(0,520,0,0)
-	Main.Position = UDim2.new(0.5,-260,0.5,0)
-	tween(Main, {Size = UDim2.new(0,520,0,420), Position = UDim2.new(0.5,-260,0.5,-210)}, 0.3)
+	showBtn.Visible = false; Main.Visible = true
+	Main.Size = UDim2.new(0, WINW, 0, 0); Main.Position = UDim2.new(0.5, -WINW/2, 0.5, 0)
+	tw(Main, {Size = UDim2.new(0, WINW, 0, WINH), Position = UDim2.new(0.5, -WINW/2, 0.5, -WINH/2)}, 0.28, Enum.EasingStyle.Back)
 end)
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                      НАВИГАЦИЯ (табы)                       │
--- └─────────────────────────────────────────────────────────────┘
-local tabNames = {"Меню","Главное","Визуал","Инфа"}
+-- ─── Nav bar ─────────────────────────────
+local tabNames  = {"Меню", "Главное", "Визуал", "Инфа"}
 local tabFrames = {}
 local tabBtns   = {}
-local activeTab = "Меню"
+local activeTab = ""
 
 local navBar = Instance.new("Frame")
-navBar.Size = UDim2.new(1,0,0,38)
-navBar.Position = UDim2.new(0,0,0,40)
-navBar.BackgroundColor3 = Color3.fromRGB(24,24,30)
-navBar.BorderSizePixel = 0
-navBar.ZIndex = 3
-navBar.Parent = Main
+navBar.Size = UDim2.new(1, 0, 0, 34); navBar.Position = UDim2.new(0, 0, 0, 39)
+navBar.BackgroundColor3 = Color3.fromRGB(15, 15, 21)
+navBar.BorderSizePixel = 0; navBar.ZIndex = 5; navBar.Parent = Main
 
-local navLayout = Instance.new("UIListLayout")
-navLayout.FillDirection = Enum.FillDirection.Horizontal
-navLayout.SortOrder = Enum.SortOrder.LayoutOrder
-navLayout.Parent = navBar
+local navLine = Instance.new("Frame")
+navLine.Size = UDim2.new(1, 0, 0, 1); navLine.Position = UDim2.new(0, 0, 1, 0)
+navLine.BackgroundColor3 = Color3.fromRGB(28, 30, 46); navLine.BorderSizePixel = 0
+navLine.ZIndex = 5; navLine.Parent = navBar
 
-local navPad = Instance.new("UIPadding")
-navPad.PaddingLeft = UDim.new(0,6)
-navPad.Parent = navBar
+do
+	local ll = Instance.new("UIListLayout"); ll.FillDirection = Enum.FillDirection.Horizontal
+	ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Parent = navBar
+	local lp = Instance.new("UIPadding"); lp.PaddingLeft = UDim.new(0, 4); lp.Parent = navBar
+end
 
--- Контент-зона
+-- Content zone
 local contentZone = Instance.new("Frame")
-contentZone.Size = UDim2.new(1,0,1,-82)
-contentZone.Position = UDim2.new(0,0,0,82)
-contentZone.BackgroundTransparency = 1
-contentZone.ClipsDescendants = true
-contentZone.Parent = Main
+contentZone.Size = UDim2.new(1, 0, 1, -74); contentZone.Position = UDim2.new(0, 0, 0, 74)
+contentZone.BackgroundTransparency = 1; contentZone.ClipsDescendants = true
+contentZone.ZIndex = 2; contentZone.Parent = Main
 
 local function makeTabFrame(name)
 	local f = Instance.new("ScrollingFrame")
-	f.Name = name
-	f.Size = UDim2.new(1,0,1,0)
-	f.BackgroundTransparency = 1
-	f.BorderSizePixel = 0
-	f.ScrollBarThickness = 4
-	f.ScrollBarImageColor3 = Color3.fromRGB(100,180,255)
-	f.Visible = false
-	f.Parent = contentZone
-	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0,6)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Parent = f
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0,10)
-	pad.PaddingRight = UDim.new(0,10)
-	pad.PaddingTop = UDim.new(0,8)
-	pad.Parent = f
-	-- авторазмер
-	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		f.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 20)
+	f.Name = name; f.Size = UDim2.new(1, 0, 1, 0); f.Position = UDim2.new(0, 0, 0, 0)
+	f.BackgroundTransparency = 1; f.BorderSizePixel = 0
+	f.ScrollBarThickness = 3; f.ScrollBarImageColor3 = Color3.fromRGB(60, 120, 255)
+	f.Visible = false; f.ZIndex = 2; f.Parent = contentZone
+	local ll = Instance.new("UIListLayout"); ll.Padding = UDim.new(0, 5)
+	ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Parent = f
+	local lp = Instance.new("UIPadding"); lp.PaddingLeft = UDim.new(0, 9); lp.PaddingRight = UDim.new(0, 9)
+	lp.PaddingTop = UDim.new(0, 7); lp.PaddingBottom = UDim.new(0, 10); lp.Parent = f
+	ll:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		f.CanvasSize = UDim2.new(0, 0, 0, ll.AbsoluteContentSize.Y + 16)
 	end)
 	return f
 end
 
--- Сначала создаём все фреймы и кнопки
 for i, name in ipairs(tabNames) do
 	tabFrames[name] = makeTabFrame(name)
-
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0,114,1,0)
-	btn.BackgroundTransparency = 1
-	btn.Text = name
-	btn.TextColor3 = Color3.fromRGB(140,145,160)
-	btn.TextSize = 13
-	btn.Font = Enum.Font.GothamSemibold
-	btn.LayoutOrder = i
-	btn.ZIndex = 4
-	btn.Parent = navBar
-
-	local indicator = Instance.new("Frame")
-	indicator.Size = UDim2.new(0,0,0,2)
-	indicator.Position = UDim2.new(0.5,0,1,-2)
-	indicator.AnchorPoint = Vector2.new(0.5,0)
-	indicator.BackgroundColor3 = Color3.fromRGB(100,180,255)
-	indicator.BorderSizePixel = 0
-	indicator.ZIndex = 5
-	indicator.Parent = btn
-
-	tabBtns[name] = {btn=btn, ind=indicator}
+	btn.Size = UDim2.new(0, 110, 1, 0); btn.BackgroundTransparency = 1
+	btn.Text = name; btn.TextColor3 = Color3.fromRGB(100, 105, 128)
+	btn.TextSize = 12; btn.Font = Enum.Font.GothamSemibold
+	btn.LayoutOrder = i; btn.ZIndex = 6; btn.AutoButtonColor = false; btn.Parent = navBar
+	local ind = Instance.new("Frame")
+	ind.Size = UDim2.new(0, 0, 0, 2); ind.Position = UDim2.new(0.5, 0, 1, -2)
+	ind.AnchorPoint = Vector2.new(0.5, 0); ind.BackgroundColor3 = Color3.fromRGB(70, 140, 255)
+	ind.BorderSizePixel = 0; ind.ZIndex = 7; ind.Parent = btn
+	tabBtns[name] = {btn = btn, ind = ind}
+	btn.MouseEnter:Connect(function()
+		if activeTab ~= name then tw(btn, {TextColor3 = Color3.fromRGB(165, 170, 200)}, 0.12) end
+	end)
+	btn.MouseLeave:Connect(function()
+		if activeTab ~= name then tw(btn, {TextColor3 = Color3.fromRGB(100, 105, 128)}, 0.12) end
+	end)
 end
 
--- Функция переключения (вызывается ПОСЛЕ того как tabBtns и tabFrames заполнены)
 local function switchTab(name)
 	if activeTab == name then return end
 	activeTab = name
 	for _, n in ipairs(tabNames) do
-		local isActive = (n == name)
-		tabFrames[n].Visible = isActive
-		if isActive then
-			tabBtns[n].ind.Size = UDim2.new(0.7,0,0,2)
-			tabBtns[n].ind.Position = UDim2.new(0.15,0,1,-2)
-			tabBtns[n].btn.TextColor3 = Color3.fromRGB(100,180,255)
-		else
-			tabBtns[n].ind.Size = UDim2.new(0,0,0,2)
-			tabBtns[n].ind.Position = UDim2.new(0.5,0,1,-2)
-			tabBtns[n].btn.TextColor3 = Color3.fromRGB(140,145,160)
-		end
+		local on = (n == name)
+		tabFrames[n].Visible = on
+		tabBtns[n].ind.Size     = on and UDim2.new(0.62, 0, 0, 2) or UDim2.new(0, 0, 0, 2)
+		tabBtns[n].ind.Position = on and UDim2.new(0.19, 0, 1, -2) or UDim2.new(0.5, 0, 1, -2)
+		tabBtns[n].btn.TextColor3 = on and Color3.fromRGB(70, 140, 255) or Color3.fromRGB(100, 105, 128)
+		tabBtns[n].btn.Font = on and Enum.Font.GothamBold or Enum.Font.GothamSemibold
 	end
 end
 
--- Привязываем клики
 for _, name in ipairs(tabNames) do
-	local capName = name
-	tabBtns[name].btn.MouseButton1Click:Connect(function()
-		switchTab(capName)
-	end)
+	local cap = name
+	tabBtns[name].btn.MouseButton1Click:Connect(function() switchTab(cap) end)
 end
 
--- Показать первый таб
-activeTab = ""
 switchTab("Меню")
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                 СТРОИТЕЛИ ЭЛЕМЕНТОВ UI                      │
--- └─────────────────────────────────────────────────────────────┘
-local function makeSection(parent, title)
-	local header = Instance.new("TextLabel")
-	header.Size = UDim2.new(1,0,0,22)
-	header.BackgroundTransparency = 1
-	header.TextColor3 = Color3.fromRGB(100,180,255)
-	header.TextSize = 11
-	header.Font = Enum.Font.GothamBold
-	header.Text = ("── %s ──"):format(title:upper())
-	header.TextXAlignment = Enum.TextXAlignment.Left
-	header.Parent = parent
+-- ══════════════════════════════════════════
+--  UI BUILDERS
+-- ══════════════════════════════════════════
+
+-- Секция-заголовок
+local function makeSection(parent, title, order)
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, 0, 0, 18); f.BackgroundTransparency = 1
+	f.LayoutOrder = order or 0; f.Parent = parent
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, 0, 1, 0); lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.fromRGB(60, 120, 255); lbl.TextSize = 9
+	lbl.Font = Enum.Font.GothamBold; lbl.Text = "  " .. title:upper()
+	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = f
+	local line = Instance.new("Frame")
+	line.Size = UDim2.new(1, 0, 0, 1); line.Position = UDim2.new(0, 0, 1, -1)
+	line.BackgroundColor3 = Color3.fromRGB(28, 30, 50); line.BorderSizePixel = 0; line.Parent = f
 end
 
--- Тоггл-кнопка
-local function makeToggle(parent, label, description, onToggle, order)
+-- Тоггл  (ИСПРАВЛЕННЫЙ — btn только на свитче, rowBtn для hover на всей строке)
+local function makeToggle(parent, label, desc, onToggle, order)
 	local row = Instance.new("Frame")
-	row.Name = label
-	row.Size = UDim2.new(1,0,0,54)
-	row.BackgroundColor3 = Color3.fromRGB(26,26,32)
-	row.BorderSizePixel = 0
-	row.LayoutOrder = order or 0
-	row.Parent = parent
+	row.Name = label; row.Size = UDim2.new(1, 0, 0, 50)
+	row.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	row.BorderSizePixel = 0; row.LayoutOrder = order or 0; row.Parent = parent
 	Instance.new("UICorner").Parent = row
 
+	-- левая цветная полоска (появляется при включении)
+	local stripe = Instance.new("Frame")
+	stripe.Size = UDim2.new(0, 3, 0.7, 0); stripe.Position = UDim2.new(0, 0, 0.15, 0)
+	stripe.BackgroundColor3 = Color3.fromRGB(70, 140, 255)
+	stripe.BackgroundTransparency = 1; stripe.BorderSizePixel = 0; stripe.ZIndex = 2
+	stripe.Parent = row; Instance.new("UICorner").Parent = stripe
+
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(0.65,0,0,22)
-	lbl.Position = UDim2.new(0,12,0,6)
-	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(210,215,230)
-	lbl.TextSize = 13
-	lbl.Font = Enum.Font.GothamSemibold
-	lbl.Text = label
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = row
+	lbl.Size = UDim2.new(0.6, 0, 0, 18); lbl.Position = UDim2.new(0, 12, 0, 7)
+	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(185, 190, 215)
+	lbl.TextSize = 12; lbl.Font = Enum.Font.GothamSemibold; lbl.Text = label
+	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 2; lbl.Parent = row
 
-	local desc = Instance.new("TextLabel")
-	desc.Size = UDim2.new(0.82,0,0,18)
-	desc.Position = UDim2.new(0,12,0,28)
-	desc.BackgroundTransparency = 1
-	desc.TextColor3 = Color3.fromRGB(120,125,140)
-	desc.TextSize = 11
-	desc.Font = Enum.Font.Gotham
-	desc.Text = description
-	desc.TextXAlignment = Enum.TextXAlignment.Left
-	desc.TextWrapped = true
-	desc.Parent = row
+	local descL = Instance.new("TextLabel")
+	descL.Size = UDim2.new(0.72, 0, 0, 14); descL.Position = UDim2.new(0, 12, 0, 27)
+	descL.BackgroundTransparency = 1; descL.TextColor3 = Color3.fromRGB(80, 85, 108)
+	descL.TextSize = 10; descL.Font = Enum.Font.Gotham; descL.Text = desc
+	descL.TextXAlignment = Enum.TextXAlignment.Left; descL.TextWrapped = true
+	descL.ZIndex = 2; descL.Parent = row
 
-	-- переключатель
-	local switchBg = Instance.new("Frame")
-	switchBg.Size = UDim2.new(0,44,0,24)
-	switchBg.Position = UDim2.new(1,-56,0.5,-12)
-	switchBg.BackgroundColor3 = Color3.fromRGB(50,50,60)
-	switchBg.BorderSizePixel = 0
-	switchBg.Parent = row
-	local sbCorner = Instance.new("UICorner")
-	sbCorner.CornerRadius = UDim.new(1,0)
-	sbCorner.Parent = switchBg
+	-- Switch background
+	local swBg = Instance.new("Frame")
+	swBg.Size = UDim2.new(0, 38, 0, 20); swBg.Position = UDim2.new(1, -48, 0.5, -10)
+	swBg.BackgroundColor3 = Color3.fromRGB(34, 34, 46); swBg.BorderSizePixel = 0
+	swBg.ZIndex = 3; swBg.Parent = row; Instance.new("UICorner").Parent = swBg
 
 	local knob = Instance.new("Frame")
-	knob.Size = UDim2.new(0,18,0,18)
-	knob.Position = UDim2.new(0,3,0.5,-9)
-	knob.BackgroundColor3 = Color3.fromRGB(160,165,180)
-	knob.BorderSizePixel = 0
-	knob.Parent = switchBg
-	Instance.new("UICorner").Parent = knob
+	knob.Size = UDim2.new(0, 14, 0, 14); knob.Position = UDim2.new(0, 3, 0.5, -7)
+	knob.BackgroundColor3 = Color3.fromRGB(115, 120, 148); knob.BorderSizePixel = 0
+	knob.ZIndex = 4; knob.Parent = swBg; Instance.new("UICorner").Parent = knob
+
+	-- кнопка ТОЛЬКО на области свитча
+	local swBtn = Instance.new("TextButton")
+	swBtn.Size = UDim2.new(1, 0, 1, 0); swBtn.BackgroundTransparency = 1
+	swBtn.Text = ""; swBtn.AutoButtonColor = false; swBtn.ZIndex = 5; swBtn.Parent = swBg
+
+	-- невидимая кнопка на весь ряд (только hover)
+	local rowBtn = Instance.new("TextButton")
+	rowBtn.Size = UDim2.new(1, 0, 1, 0); rowBtn.BackgroundTransparency = 1
+	rowBtn.Text = ""; rowBtn.AutoButtonColor = false; rowBtn.ZIndex = 2; rowBtn.Parent = row
 
 	local enabled = false
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1,0,1,0)
-	btn.BackgroundTransparency = 1
-	btn.Text = ""
-	btn.Parent = row
-
-	btn.MouseButton1Click:Connect(function()
+	local function doToggle()
 		enabled = not enabled
 		if enabled then
-			tween(switchBg, {BackgroundColor3 = Color3.fromRGB(80,160,255)}, 0.2)
-			tween(knob, {Position = UDim2.new(1,-21,0.5,-9), BackgroundColor3 = Color3.fromRGB(255,255,255)}, 0.2)
+			tw(swBg,   {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.2)
+			tw(knob,   {Position = UDim2.new(1, -17, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.2)
+			tw(stripe, {BackgroundTransparency = 0}, 0.18)
+			tw(lbl,    {TextColor3 = Color3.fromRGB(220, 225, 245)}, 0.18)
+			tw(row,    {BackgroundColor3 = Color3.fromRGB(19, 22, 38)}, 0.18)
 		else
-			tween(switchBg, {BackgroundColor3 = Color3.fromRGB(50,50,60)}, 0.2)
-			tween(knob, {Position = UDim2.new(0,3,0.5,-9), BackgroundColor3 = Color3.fromRGB(160,165,180)}, 0.2)
+			tw(swBg,   {BackgroundColor3 = Color3.fromRGB(34, 34, 46)}, 0.2)
+			tw(knob,   {Position = UDim2.new(0, 3, 0.5, -7), BackgroundColor3 = Color3.fromRGB(115, 120, 148)}, 0.2)
+			tw(stripe, {BackgroundTransparency = 1}, 0.18)
+			tw(lbl,    {TextColor3 = Color3.fromRGB(185, 190, 215)}, 0.18)
+			tw(row,    {BackgroundColor3 = Color3.fromRGB(19, 19, 26)}, 0.18)
 		end
 		onToggle(enabled)
+	end
+
+	swBtn.MouseButton1Click:Connect(doToggle)
+	rowBtn.MouseButton1Click:Connect(doToggle)
+
+	rowBtn.MouseEnter:Connect(function()
+		tw(row, {BackgroundColor3 = enabled
+			and Color3.fromRGB(21, 25, 42)
+			or  Color3.fromRGB(22, 22, 30)}, 0.12)
+	end)
+	rowBtn.MouseLeave:Connect(function()
+		tw(row, {BackgroundColor3 = enabled
+			and Color3.fromRGB(19, 22, 38)
+			or  Color3.fromRGB(19, 19, 26)}, 0.12)
 	end)
 
 	return row, function() return enabled end
 end
 
 -- Слайдер
-local function makeSlider(parent, label, min, max, default, unit, onChange, order)
+local function makeSlider(parent, label, minV, maxV, default, unit, onChange, order)
 	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1,0,0,60)
-	row.BackgroundColor3 = Color3.fromRGB(26,26,32)
-	row.BorderSizePixel = 0
-	row.LayoutOrder = order or 0
-	row.Parent = parent
+	row.Size = UDim2.new(1, 0, 0, 52); row.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	row.BorderSizePixel = 0; row.LayoutOrder = order or 0; row.Parent = parent
 	Instance.new("UICorner").Parent = row
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(0.6,0,0,20)
-	lbl.Position = UDim2.new(0,12,0,6)
-	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(210,215,230)
-	lbl.TextSize = 12
-	lbl.Font = Enum.Font.GothamSemibold
-	lbl.Text = label
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = row
+	lbl.Size = UDim2.new(0.55, 0, 0, 16); lbl.Position = UDim2.new(0, 10, 0, 4)
+	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(165, 170, 200)
+	lbl.TextSize = 11; lbl.Font = Enum.Font.GothamSemibold; lbl.Text = label
+	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = row
 
 	local valLbl = Instance.new("TextLabel")
-	valLbl.Size = UDim2.new(0.35,0,0,20)
-	valLbl.Position = UDim2.new(0.63,0,0,6)
-	valLbl.BackgroundTransparency = 1
-	valLbl.TextColor3 = Color3.fromRGB(100,180,255)
-	valLbl.TextSize = 12
-	valLbl.Font = Enum.Font.GothamBold
+	valLbl.Size = UDim2.new(0.4, 0, 0, 16); valLbl.Position = UDim2.new(0.58, 0, 0, 4)
+	valLbl.BackgroundTransparency = 1; valLbl.TextColor3 = Color3.fromRGB(70, 140, 255)
+	valLbl.TextSize = 11; valLbl.Font = Enum.Font.GothamBold
 	valLbl.Text = tostring(default) .. (unit or "")
-	valLbl.TextXAlignment = Enum.TextXAlignment.Right
-	valLbl.Parent = row
+	valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = row
 
 	local defLbl = Instance.new("TextLabel")
-	defLbl.Size = UDim2.new(1,-24,0,14)
-	defLbl.Position = UDim2.new(0,12,0,46)
-	defLbl.BackgroundTransparency = 1
-	defLbl.TextColor3 = Color3.fromRGB(90,95,110)
-	defLbl.TextSize = 10
-	defLbl.Font = Enum.Font.Gotham
+	defLbl.Size = UDim2.new(1, -20, 0, 11); defLbl.Position = UDim2.new(0, 10, 0, 40)
+	defLbl.BackgroundTransparency = 1; defLbl.TextColor3 = Color3.fromRGB(58, 62, 85)
+	defLbl.TextSize = 9; defLbl.Font = Enum.Font.Gotham
 	defLbl.Text = "По умолчанию: " .. tostring(default)
-	defLbl.TextXAlignment = Enum.TextXAlignment.Left
-	defLbl.Parent = row
+	defLbl.TextXAlignment = Enum.TextXAlignment.Left; defLbl.Parent = row
 
 	local track = Instance.new("Frame")
-	track.Size = UDim2.new(1,-24,0,6)
-	track.Position = UDim2.new(0,12,0,30)
-	track.BackgroundColor3 = Color3.fromRGB(45,45,55)
-	track.BorderSizePixel = 0
-	track.Parent = row
-	Instance.new("UICorner").Parent = track
+	track.Size = UDim2.new(1, -20, 0, 5); track.Position = UDim2.new(0, 10, 0, 22)
+	track.BackgroundColor3 = Color3.fromRGB(32, 35, 52); track.BorderSizePixel = 0
+	track.Parent = row; Instance.new("UICorner").Parent = track
 
+	local initRel = math.clamp((default - minV) / (maxV - minV), 0, 1)
 	local fill = Instance.new("Frame")
-	fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
-	fill.BackgroundColor3 = Color3.fromRGB(80,160,255)
-	fill.BorderSizePixel = 0
-	fill.Parent = track
-	Instance.new("UICorner").Parent = fill
+	fill.Size = UDim2.new(initRel, 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(55, 125, 255)
+	fill.BorderSizePixel = 0; fill.Parent = track; Instance.new("UICorner").Parent = fill
 
 	local thumb = Instance.new("Frame")
-	thumb.Size = UDim2.new(0,14,0,14)
-	thumb.Position = UDim2.new((default-min)/(max-min),0,0.5,-7)
-	thumb.AnchorPoint = Vector2.new(0.5,0)
-	thumb.BackgroundColor3 = Color3.fromRGB(255,255,255)
-	thumb.BorderSizePixel = 0
-	thumb.ZIndex = 3
-	thumb.Parent = track
+	thumb.Size = UDim2.new(0, 13, 0, 13)
+	thumb.Position = UDim2.new(initRel, -6, 0.5, -6)
+	thumb.BackgroundColor3 = Color3.fromRGB(240, 240, 255)
+	thumb.BorderSizePixel = 0; thumb.ZIndex = 3; thumb.Parent = track
 	Instance.new("UICorner").Parent = thumb
 
 	local dragging = false
-	local currentVal = default
-
-	local function updateSlider(absPos)
-		local rel = math.clamp((absPos - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-		currentVal = math.floor(min + rel*(max-min) + 0.5)
-		valLbl.Text = tostring(currentVal) .. (unit or "")
-		tween(fill, {Size = UDim2.new(rel,0,1,0)}, 0.05)
-		tween(thumb, {Position = UDim2.new(rel,0,0.5,-7)}, 0.05)
-		onChange(currentVal)
+	local function update(absX)
+		local rel = math.clamp((absX - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+		local val = math.floor(minV + rel * (maxV - minV) + 0.5)
+		valLbl.Text = tostring(val) .. (unit or "")
+		fill.Size = UDim2.new(rel, 0, 1, 0)
+		thumb.Position = UDim2.new(rel, -6, 0.5, -6)
+		onChange(val)
 	end
 
-	local clickArea = Instance.new("TextButton")
-	clickArea.Size = UDim2.new(1,0,1,0)
-	clickArea.BackgroundTransparency = 1
-	clickArea.Text = ""
-	clickArea.ZIndex = 4
-	clickArea.Parent = track
+	local area = Instance.new("TextButton")
+	area.Size = UDim2.new(1, 0, 3, 0); area.Position = UDim2.new(0, 0, -1, 0)
+	area.BackgroundTransparency = 1; area.Text = ""; area.ZIndex = 4; area.Parent = track
 
-	clickArea.MouseButton1Down:Connect(function()
+	area.MouseButton1Down:Connect(function()
 		dragging = true
+		tw(thumb, {Size = UDim2.new(0, 16, 0, 16), Position = UDim2.new(fill.Size.X.Scale, -8, 0.5, -8)}, 0.1)
 	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			updateSlider(input.Position.X)
+	UserInputService.InputChanged:Connect(function(inp)
+		if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+			update(inp.Position.X)
 		end
 	end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	UserInputService.InputEnded:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
 			dragging = false
+			tw(thumb, {Size = UDim2.new(0, 13, 0, 13)}, 0.1)
 		end
 	end)
-	clickArea.MouseButton1Up:Connect(function()
-		updateSlider(UserInputService:GetMouseLocation().X)
+	area.MouseButton1Up:Connect(function()
+		update(UserInputService:GetMouseLocation().X)
+		dragging = false; tw(thumb, {Size = UDim2.new(0, 13, 0, 13)}, 0.1)
 	end)
 end
 
--- Инфо-строка
-local function makeInfoCard(parent, title, text)
+-- Инфо-карточка
+local function makeInfoCard(parent, title, text, order)
 	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1,0,0,0)
-	row.AutomaticSize = Enum.AutomaticSize.Y
-	row.BackgroundColor3 = Color3.fromRGB(24,24,30)
-	row.BorderSizePixel = 0
-	row.Parent = parent
+	row.Size = UDim2.new(1, 0, 0, 0); row.AutomaticSize = Enum.AutomaticSize.Y
+	row.BackgroundColor3 = Color3.fromRGB(19, 19, 26); row.BorderSizePixel = 0
+	row.LayoutOrder = order or 0; row.Parent = parent
 	Instance.new("UICorner").Parent = row
-
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0,12)
-	pad.PaddingRight = UDim.new(0,12)
-	pad.PaddingTop = UDim.new(0,8)
-	pad.PaddingBottom = UDim.new(0,8)
-	pad.Parent = row
-
+	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
+	pad.PaddingTop = UDim.new(0, 7); pad.PaddingBottom = UDim.new(0, 7); pad.Parent = row
 	local t = Instance.new("TextLabel")
-	t.Size = UDim2.new(1,0,0,18)
-	t.BackgroundTransparency = 1
-	t.TextColor3 = Color3.fromRGB(100,180,255)
-	t.TextSize = 12
-	t.Font = Enum.Font.GothamBold
-	t.Text = title
-	t.TextXAlignment = Enum.TextXAlignment.Left
-	t.Parent = row
-
+	t.Size = UDim2.new(1, 0, 0, 14); t.BackgroundTransparency = 1
+	t.TextColor3 = Color3.fromRGB(70, 135, 255); t.TextSize = 11
+	t.Font = Enum.Font.GothamBold; t.Text = title
+	t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = row
 	local d = Instance.new("TextLabel")
-	d.Size = UDim2.new(1,0,0,0)
-	d.Position = UDim2.new(0,0,0,20)
-	d.AutomaticSize = Enum.AutomaticSize.Y
-	d.BackgroundTransparency = 1
-	d.TextColor3 = Color3.fromRGB(170,175,195)
-	d.TextSize = 11
-	d.Font = Enum.Font.Gotham
-	d.Text = text
-	d.TextXAlignment = Enum.TextXAlignment.Left
-	d.TextWrapped = true
-	d.Parent = row
+	d.Size = UDim2.new(1, 0, 0, 0); d.Position = UDim2.new(0, 0, 0, 16)
+	d.AutomaticSize = Enum.AutomaticSize.Y; d.BackgroundTransparency = 1
+	d.TextColor3 = Color3.fromRGB(130, 135, 165); d.TextSize = 10
+	d.Font = Enum.Font.Gotham; d.Text = text
+	d.TextXAlignment = Enum.TextXAlignment.Left; d.TextWrapped = true; d.Parent = row
 end
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                    ТАБ: МЕНЮ (профиль)                      │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  STATUS OVERLAY (правый верхний угол)
+--  Только Авто-прыжок от пола
+-- ══════════════════════════════════════════
+local statusOvF = Instance.new("Frame")
+statusOvF.Name = "StatusOverlay"
+statusOvF.Size = UDim2.new(0, 145, 0, 46)
+statusOvF.Position = UDim2.new(1, -155, 0, 55)
+statusOvF.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+statusOvF.BackgroundTransparency = 0.15
+statusOvF.BorderSizePixel = 0; statusOvF.ZIndex = 30
+statusOvF.Visible = CONFIG.ShowStatusOverlay
+statusOvF.Parent = ScreenGui
+Instance.new("UICorner").Parent = statusOvF
+
+-- Верхняя цветная линия
+local ovLine = Instance.new("Frame")
+ovLine.Size = UDim2.new(1, 0, 0, 2); ovLine.BackgroundColor3 = Color3.fromRGB(60, 120, 255)
+ovLine.BorderSizePixel = 0; ovLine.ZIndex = 31; ovLine.Parent = statusOvF
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = ovLine
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0,   Color3.fromRGB(50, 110, 255)),
+		ColorSequenceKeypoint.new(1,   Color3.fromRGB(140, 50, 255)),
+	}; g.Parent = ovLine
+end
+
+local ovTitle = Instance.new("TextLabel")
+ovTitle.Size = UDim2.new(1, -10, 0, 13); ovTitle.Position = UDim2.new(0, 8, 0, 5)
+ovTitle.BackgroundTransparency = 1; ovTitle.TextColor3 = Color3.fromRGB(60, 120, 255)
+ovTitle.TextSize = 8; ovTitle.Font = Enum.Font.GothamBold
+ovTitle.Text = "СТАТУС ФУНКЦИЙ"; ovTitle.TextXAlignment = Enum.TextXAlignment.Left
+ovTitle.ZIndex = 31; ovTitle.Parent = statusOvF
+
+-- Авто-прыжок строка
+local ovRow = Instance.new("Frame")
+ovRow.Size = UDim2.new(1, -16, 0, 16); ovRow.Position = UDim2.new(0, 8, 0, 22)
+ovRow.BackgroundTransparency = 1; ovRow.ZIndex = 31; ovRow.Parent = statusOvF
+
+local ovDot = Instance.new("Frame")
+ovDot.Size = UDim2.new(0, 8, 0, 8); ovDot.Position = UDim2.new(0, 0, 0.5, -4)
+ovDot.BackgroundColor3 = Color3.fromRGB(170, 45, 45); ovDot.BorderSizePixel = 0
+ovDot.ZIndex = 32; ovDot.Parent = ovRow; Instance.new("UICorner").Parent = ovDot
+
+local ovLbl = Instance.new("TextLabel")
+ovLbl.Size = UDim2.new(1, -14, 1, 0); ovLbl.Position = UDim2.new(0, 13, 0, 0)
+ovLbl.BackgroundTransparency = 1; ovLbl.TextColor3 = Color3.fromRGB(105, 110, 138)
+ovLbl.TextSize = 10; ovLbl.Font = Enum.Font.GothamSemibold
+ovLbl.Text = "Авто-прыжок у пола"; ovLbl.TextXAlignment = Enum.TextXAlignment.Left
+ovLbl.ZIndex = 32; ovLbl.Parent = ovRow
+
+local function updateStatusOverlay()
+	if State.AutoJump then
+		tw(ovDot, {BackgroundColor3 = Color3.fromRGB(50, 210, 100)}, 0.2)
+		tw(ovLbl, {TextColor3 = Color3.fromRGB(185, 195, 225)}, 0.2)
+	else
+		tw(ovDot, {BackgroundColor3 = Color3.fromRGB(170, 45, 45)}, 0.2)
+		tw(ovLbl, {TextColor3 = Color3.fromRGB(105, 110, 138)}, 0.2)
+	end
+end
+
+-- ══════════════════════════════════════════
+--  FPS WIDGET (Визуал — перетаскиваемый)
+-- ══════════════════════════════════════════
+local fpsWidget = Instance.new("Frame")
+fpsWidget.Name = "FPSWidget"
+fpsWidget.Size = UDim2.new(0, 88, 0, 36)
+fpsWidget.Position = UDim2.new(0, 10, 0, 55)
+fpsWidget.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+fpsWidget.BackgroundTransparency = 0.15
+fpsWidget.BorderSizePixel = 0; fpsWidget.ZIndex = 30
+fpsWidget.Active = true; fpsWidget.Draggable = true
+fpsWidget.Visible = false; fpsWidget.Parent = ScreenGui
+Instance.new("UICorner").Parent = fpsWidget
+
+local fpsLine = Instance.new("Frame")
+fpsLine.Size = UDim2.new(1, 0, 0, 2); fpsLine.BackgroundColor3 = Color3.fromRGB(60, 200, 120)
+fpsLine.BorderSizePixel = 0; fpsLine.ZIndex = 31; fpsLine.Parent = fpsWidget
+Instance.new("UICorner").Parent = fpsLine
+
+local fpsTitle = Instance.new("TextLabel")
+fpsTitle.Size = UDim2.new(1, 0, 0, 12); fpsTitle.Position = UDim2.new(0, 0, 0, 4)
+fpsTitle.BackgroundTransparency = 1; fpsTitle.TextColor3 = Color3.fromRGB(60, 200, 120)
+fpsTitle.TextSize = 8; fpsTitle.Font = Enum.Font.GothamBold
+fpsTitle.Text = "FPS METER"; fpsTitle.Parent = fpsWidget
+
+local fpsLbl = Instance.new("TextLabel")
+fpsLbl.Size = UDim2.new(1, 0, 0, 18); fpsLbl.Position = UDim2.new(0, 0, 0, 16)
+fpsLbl.BackgroundTransparency = 1; fpsLbl.TextColor3 = Color3.fromRGB(220, 230, 255)
+fpsLbl.TextSize = 16; fpsLbl.Font = Enum.Font.GothamBold
+fpsLbl.Text = "-- fps"; fpsLbl.Parent = fpsWidget
+
+-- FPS counter logic
+local fpsHistory = {}
+local FPS_SHOWN = false
+RunService.Heartbeat:Connect(function(dt)
+	if not FPS_SHOWN then return end
+	table.insert(fpsHistory, 1 / math.max(dt, 0.001))
+	if #fpsHistory > 20 then table.remove(fpsHistory, 1) end
+	local sum = 0; for _, v in ipairs(fpsHistory) do sum = sum + v end
+	local fps = math.floor(sum / #fpsHistory)
+	fpsLbl.Text = fps .. " fps"
+	local c
+	if fps >= 55 then c = Color3.fromRGB(60, 210, 120)
+	elseif fps >= 30 then c = Color3.fromRGB(230, 180, 50)
+	else c = Color3.fromRGB(210, 70, 70) end
+	fpsLbl.TextColor3 = c; fpsLine.BackgroundColor3 = c
+end)
+
+-- ══════════════════════════════════════════
+--  TAB: МЕНЮ
+-- ══════════════════════════════════════════
 do
 	local f = tabFrames["Меню"]
-	makeSection(f, "Профиль игрока")
+	makeSection(f, "Профиль игрока", 1)
 
-	local profileCard = Instance.new("Frame")
-	profileCard.Size = UDim2.new(1,0,0,100)
-	profileCard.BackgroundColor3 = Color3.fromRGB(26,26,32)
-	profileCard.BorderSizePixel = 0
-	profileCard.Parent = f
-	Instance.new("UICorner").Parent = profileCard
+	-- Карточка профиля
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(1, 0, 0, 78); card.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	card.BorderSizePixel = 0; card.LayoutOrder = 2; card.Parent = f
+	Instance.new("UICorner").Parent = card
 
-	-- Аватар (заглушка)
-	local avatar = Instance.new("ImageLabel")
-	avatar.Size = UDim2.new(0,64,0,64)
-	avatar.Position = UDim2.new(0,12,0.5,-32)
-	avatar.BackgroundColor3 = Color3.fromRGB(40,40,50)
-	avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. Player.UserId .. "&w=420&h=420"
-	avatar.Parent = profileCard
-	Instance.new("UICorner").Parent = avatar
+	-- Фон-свечение аватара (пульсирует)
+	local glow = Instance.new("Frame")
+	glow.Size = UDim2.new(0, 56, 0, 56); glow.Position = UDim2.new(0, 10, 0.5, -28)
+	glow.BackgroundColor3 = Color3.fromRGB(50, 110, 255); glow.BackgroundTransparency = 0.6
+	glow.BorderSizePixel = 0; glow.Parent = card; Instance.new("UICorner").Parent = glow
+	task.spawn(function()
+		while card.Parent do
+			tw(glow, {BackgroundTransparency = 0.35}, 1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			task.wait(1)
+			tw(glow, {BackgroundTransparency = 0.72}, 1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			task.wait(1)
+		end
+	end)
 
-	local function addInfo(label, val, yOff)
+	local av = Instance.new("ImageLabel")
+	av.Size = UDim2.new(0, 50, 0, 50); av.Position = UDim2.new(0, 13, 0.5, -25)
+	av.BackgroundColor3 = Color3.fromRGB(30, 30, 44)
+	av.Image = "rbxthumb://type=AvatarHeadShot&id=" .. Player.UserId .. "&w=420&h=420"
+	av.BorderSizePixel = 0; av.Parent = card; Instance.new("UICorner").Parent = av
+
+	local function addInfo(label, val, y)
 		local l = Instance.new("TextLabel")
-		l.Size = UDim2.new(0.55,0,0,18)
-		l.Position = UDim2.new(0,90,0,yOff)
-		l.BackgroundTransparency = 1
-		l.TextColor3 = Color3.fromRGB(170,175,195)
-		l.TextSize = 12
-		l.Font = Enum.Font.Gotham
-		l.Text = ("<b>%s:</b> %s"):format(label, tostring(val))
-		l.RichText = true
-		l.TextXAlignment = Enum.TextXAlignment.Left
-		l.Parent = profileCard
+		l.Size = UDim2.new(0.68, 0, 0, 14); l.Position = UDim2.new(0, 76, 0, y)
+		l.BackgroundTransparency = 1; l.TextColor3 = Color3.fromRGB(140, 145, 172)
+		l.TextSize = 11; l.Font = Enum.Font.Gotham; l.RichText = true
+		l.Text = ("<font color='#4078ff'><b>%s</b></font>  %s"):format(label, tostring(val))
+		l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = card
 	end
+	addInfo("Ник",    Player.Name,          7)
+	addInfo("Имя",    Player.DisplayName,   22)
+	addInfo("ID",     Player.UserId,        37)
+	addInfo("Команда", Player.Team and Player.Team.Name or "—", 52)
 
-	addInfo("Ник",    Player.Name,          10)
-	addInfo("DisplayName", Player.DisplayName,  30)
-	addInfo("UserID", Player.UserId,         50)
-	addInfo("Команда", Player.Team and Player.Team.Name or "Нет", 70)
+	makeSection(f, "Статистика", 3)
 
-	-- Дополнительная информация
-	makeSection(f, "Игровая статистика")
 	local statsCard = Instance.new("Frame")
-	statsCard.Size = UDim2.new(1,0,0,80)
-	statsCard.BackgroundColor3 = Color3.fromRGB(26,26,32)
-	statsCard.BorderSizePixel = 0
-	statsCard.Parent = f
+	statsCard.Size = UDim2.new(1, 0, 0, 62); statsCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	statsCard.BorderSizePixel = 0; statsCard.LayoutOrder = 4; statsCard.Parent = f
 	Instance.new("UICorner").Parent = statsCard
 
-	local function addStat(label, getVal, x, w)
-		local col = Instance.new("Frame")
-		col.Size = UDim2.new(w,0,1,0)
-		col.Position = UDim2.new(x,0,0,0)
-		col.BackgroundTransparency = 1
-		col.Parent = statsCard
-		local v = Instance.new("TextLabel")
-		v.Size = UDim2.new(1,0,0,30)
-		v.Position = UDim2.new(0,0,0,14)
-		v.BackgroundTransparency = 1
-		v.TextColor3 = Color3.fromRGB(100,180,255)
-		v.TextSize = 20
-		v.Font = Enum.Font.GothamBold
-		v.Text = tostring(getVal())
-		v.Parent = col
-		local lb = Instance.new("TextLabel")
-		lb.Size = UDim2.new(1,0,0,16)
-		lb.Position = UDim2.new(0,0,0,48)
-		lb.BackgroundTransparency = 1
-		lb.TextColor3 = Color3.fromRGB(120,125,140)
-		lb.TextSize = 10
-		lb.Font = Enum.Font.Gotham
-		lb.Text = label
-		lb.Parent = col
-		-- обновление каждые 2с
-		task.spawn(function()
-			while true do
-				task.wait(2)
-				v.Text = tostring(getVal())
-			end
-		end)
+	local statDefs = {
+		{lbl="Ping", get=function() return math.floor(Player:GetNetworkPing()*1000).."мс" end, x=0,    w=0.33},
+		{lbl="Speed",get=function()
+			local h = getChar() and getChar():FindFirstChild("Humanoid")
+			return h and math.floor(h.WalkSpeed) or 0 end,   x=0.34, w=0.32},
+		{lbl="HP",   get=function()
+			local h = getChar() and getChar():FindFirstChild("Humanoid")
+			return h and math.floor(h.Health) or 0 end,      x=0.67, w=0.33},
+	}
+	local statRefs = {}
+	for _, sd in ipairs(statDefs) do
+		local col = Instance.new("Frame"); col.Size = UDim2.new(sd.w,0,1,0)
+		col.Position = UDim2.new(sd.x,0,0,0); col.BackgroundTransparency=1; col.Parent=statsCard
+		local v = Instance.new("TextLabel"); v.Size=UDim2.new(1,0,0,26); v.Position=UDim2.new(0,0,0,10)
+		v.BackgroundTransparency=1; v.TextColor3=Color3.fromRGB(70,140,255); v.TextSize=18
+		v.Font=Enum.Font.GothamBold; v.Text=tostring(sd.get()); v.Parent=col
+		local lb = Instance.new("TextLabel"); lb.Size=UDim2.new(1,0,0,11); lb.Position=UDim2.new(0,0,0,40)
+		lb.BackgroundTransparency=1; lb.TextColor3=Color3.fromRGB(72,76,105); lb.TextSize=9
+		lb.Font=Enum.Font.Gotham; lb.Text=sd.lbl; lb.Parent=col
+		table.insert(statRefs, {v=v, get=sd.get})
 	end
+	task.spawn(function()
+		while true do task.wait(1.5)
+			for _, sr in ipairs(statRefs) do sr.v.Text = tostring(sr.get()) end
+		end
+	end)
 
-	addStat("Ping (мс)", function() return math.floor(Player:GetNetworkPing()*1000) end, 0, 0.33)
-	addStat("WalkSpeed", function()
-		local h = Character and Character:FindFirstChild("Humanoid")
-		return h and math.floor(h.WalkSpeed) or 0
-	end, 0.34, 0.33)
-	addStat("HP",        function()
-		local h = Character and Character:FindFirstChild("Humanoid")
-		return h and math.floor(h.Health) or 0
-	end, 0.67, 0.33)
+	makeSection(f, "О панели", 5)
+	local aboutCard = Instance.new("Frame")
+	aboutCard.Size = UDim2.new(1, 0, 0, 40); aboutCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	aboutCard.BorderSizePixel = 0; aboutCard.LayoutOrder = 6; aboutCard.Parent = f
+	Instance.new("UICorner").Parent = aboutCard
+	local al = Instance.new("TextLabel"); al.Size=UDim2.new(1,-16,1,0); al.Position=UDim2.new(0,8,0,0)
+	al.BackgroundTransparency=1; al.TextColor3=Color3.fromRGB(90,95,120); al.TextSize=10
+	al.Font=Enum.Font.Gotham
+	al.Text="Admin Panel v4  |  V — запись   B — воспроизвести\nCapsLock — Авто-прыжок вкл/выкл"
+	al.TextXAlignment=Enum.TextXAlignment.Left; al.TextWrapped=true; al.Parent=aboutCard
 end
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                   ТАБ: ГЛАВНОЕ                              │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  TAB: ГЛАВНОЕ
+-- ══════════════════════════════════════════
 do
 	local f = tabFrames["Главное"]
 
-	-- 1. Авто-прыжок у пола
-	makeSection(f, "Движение")
-	makeToggle(f, "Авто-прыжок у пола",
-		"Прыгает когда игрок почти касается земли",
+	makeSection(f, "Движение", 1)
+	makeToggle(f, "Авто-прыжок у пола", "Прыгает когда почти касается земли (CapsLock — вкл/выкл)",
 		function(on)
 			State.AutoJump = on
+			updateStatusOverlay()
 			notify(on and "Авто-прыжок: ВКЛ" or "Авто-прыжок: ВЫКЛ")
-		end, 1)
-	makeSlider(f, "Сила авто-прыжка", 10, 300, CONFIG.AutoJumpDefault, "", function(v)
+		end, 2)
+	makeSlider(f, "Сила авто-прыжка", 5, 200, CONFIG.AutoJumpDefault, "", function(v)
 		CONFIG.AutoJumpHeight = v
-	end, 2)
+	end, 3)
 
-	-- 2. Высокий прыжок
-	makeToggle(f, "Высокий прыжок",
-		"Даёт игроку очень высокий прыжок",
+	makeSection(f, "Прыжок", 4)
+	makeToggle(f, "Высокий прыжок", "Очень высокий прыжок (JumpPower)",
 		function(on)
 			State.HighJump = on
-			if Character and Character:FindFirstChild("Humanoid") then
-				Character.Humanoid.JumpPower = on and CONFIG.HighJumpPower or 50
-			end
+			local h = getChar() and getChar():FindFirstChild("Humanoid")
+			if h then h.JumpPower = on and CONFIG.HighJumpPower or 50 end
 			notify(on and "Высокий прыжок: ВКЛ" or "Высокий прыжок: ВЫКЛ")
-		end, 3)
+		end, 5)
 	makeSlider(f, "Сила прыжка", 50, 500, CONFIG.HighJumpDefault, "", function(v)
 		CONFIG.HighJumpPower = v
-		if State.HighJump and Character and Character:FindFirstChild("Humanoid") then
-			Character.Humanoid.JumpPower = v
-		end
-	end, 4)
-
-	-- 5. Speed Hack
-	makeSection(f, "Скорость")
-	makeToggle(f, "Speed Hack",
-		"Изменяет скорость ходьбы (WalkSpeed)",
-		function(on)
-			State.SpeedHack = on
-			if Character and Character:FindFirstChild("Humanoid") then
-				Character.Humanoid.WalkSpeed = on and CONFIG.WalkSpeed or 16
-			end
-			notify(on and "Speed Hack: ВКЛ" or "Speed Hack: ВЫКЛ")
-		end, 5)
-	makeSlider(f, "WalkSpeed", 4, 200, CONFIG.WalkSpeedDefault, "", function(v)
-		CONFIG.WalkSpeed = v
-		if State.SpeedHack and Character and Character:FindFirstChild("Humanoid") then
-			Character.Humanoid.WalkSpeed = v
+		if State.HighJump then
+			local h = getChar() and getChar():FindFirstChild("Humanoid")
+			if h then h.JumpPower = v end
 		end
 	end, 6)
+	makeToggle(f, "Infinite Jump", "Прыгать бесконечно в воздухе",
+		function(on) State.InfiniteJump = on; notify(on and "Infinite Jump: ВКЛ" or "ВЫКЛ") end, 7)
+	makeToggle(f, "Bunny Hop", "Авто-прыжок при каждом касании земли",
+		function(on) State.BunnyHop = on; notify(on and "Bunny Hop: ВКЛ" or "ВЫКЛ") end, 8)
 
-	-- 6. Infinite Jump
-	makeSection(f, "Прыжок")
-	makeToggle(f, "Infinite Jump",
-		"Позволяет прыгать в воздухе бесконечно",
+	makeSection(f, "Скорость", 9)
+	makeToggle(f, "Speed Hack", "Изменяет скорость ходьбы (WalkSpeed)",
 		function(on)
-			State.InfiniteJump = on
-			notify(on and "Infinite Jump: ВКЛ" or "Infinite Jump: ВЫКЛ")
-		end, 7)
+			State.SpeedHack = on
+			local h = getChar() and getChar():FindFirstChild("Humanoid")
+			if h then h.WalkSpeed = on and CONFIG.WalkSpeed or 16 end
+			notify(on and "Speed: " .. CONFIG.WalkSpeed or "Speed Hack: ВЫКЛ")
+		end, 10)
+	makeSlider(f, "WalkSpeed", 4, 200, CONFIG.WalkSpeedDefault, "", function(v)
+		CONFIG.WalkSpeed = v
+		if State.SpeedHack then
+			local h = getChar() and getChar():FindFirstChild("Humanoid")
+			if h then h.WalkSpeed = v end
+		end
+	end, 11)
 
-	-- Bunny Hop
-	makeToggle(f, "Bunny Hop",
-		"Автоматический распрыг (авто-прыжок при касании земли)",
-		function(on)
-			State.BunnyHop = on
-			notify(on and "Bunny Hop: ВКЛ" or "Bunny Hop: ВЫКЛ")
-		end, 8)
+	makeSection(f, "Ghost Replay  [V=запись  B=воспроизвести]", 12)
 
-	-- 4. Ghost Record / Replay
-	makeSection(f, "Запись и воспроизведение")
-	local recRow = Instance.new("Frame")
-	recRow.Size = UDim2.new(1,0,0,70)
-	recRow.BackgroundColor3 = Color3.fromRGB(26,26,32)
-	recRow.BorderSizePixel = 0
-	recRow.LayoutOrder = 9
-	recRow.Parent = f
-	Instance.new("UICorner").Parent = recRow
-
-	local recTitle = Instance.new("TextLabel")
-	recTitle.Size = UDim2.new(1,-12,0,20)
-	recTitle.Position = UDim2.new(0,12,0,6)
-	recTitle.BackgroundTransparency = 1
-	recTitle.TextColor3 = Color3.fromRGB(210,215,230)
-	recTitle.TextSize = 13
-	recTitle.Font = Enum.Font.GothamSemibold
-	recTitle.Text = "Ghost Replay"
-	recTitle.TextXAlignment = Enum.TextXAlignment.Left
-	recTitle.Parent = recRow
-
-	local recDesc = Instance.new("TextLabel")
-	recDesc.Size = UDim2.new(1,-12,0,14)
-	recDesc.Position = UDim2.new(0,12,0,26)
-	recDesc.BackgroundTransparency = 1
-	recDesc.TextColor3 = Color3.fromRGB(120,125,140)
-	recDesc.TextSize = 10
-	recDesc.Font = Enum.Font.Gotham
-	recDesc.Text = "V — начать/остановить запись   |   B — воспроизвести"
-	recDesc.TextXAlignment = Enum.TextXAlignment.Left
-	recDesc.Parent = recRow
+	local recCard = Instance.new("Frame")
+	recCard.Size = UDim2.new(1, 0, 0, 44); recCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	recCard.BorderSizePixel = 0; recCard.LayoutOrder = 13; recCard.Parent = f
+	Instance.new("UICorner").Parent = recCard
 
 	local recStatus = Instance.new("TextLabel")
-	recStatus.Size = UDim2.new(1,-12,0,14)
-	recStatus.Position = UDim2.new(0,12,0,46)
-	recStatus.BackgroundTransparency = 1
-	recStatus.TextColor3 = Color3.fromRGB(200,100,100)
-	recStatus.TextSize = 11
-	recStatus.Font = Enum.Font.GothamBold
+	recStatus.Size = UDim2.new(1, -14, 0, 16); recStatus.Position = UDim2.new(0, 10, 0, 6)
+	recStatus.BackgroundTransparency = 1; recStatus.TextColor3 = Color3.fromRGB(170, 45, 45)
+	recStatus.TextSize = 11; recStatus.Font = Enum.Font.GothamBold
 	recStatus.Text = "● Запись не активна"
-	recStatus.TextXAlignment = Enum.TextXAlignment.Left
-	recStatus.Parent = recRow
+	recStatus.TextXAlignment = Enum.TextXAlignment.Left; recStatus.Parent = recCard
 
-	-- управление записью
-	UserInputService.InputBegan:Connect(function(input, gpe)
-		if gpe then return end
-		if input.KeyCode == RecordKeybind then
-			if not State.Recording then
-				-- начало записи
-				State.Recording = true
-				RecordedFrames = {}
-				recStatus.TextColor3 = Color3.fromRGB(200,80,80)
-				recStatus.Text = "⏺ Идёт запись..."
-				notify("Запись начата (V — остановить)")
-			else
-				-- конец записи
-				State.Recording = false
-				State.HasRecord = true
-				recStatus.TextColor3 = Color3.fromRGB(100,200,100)
-				recStatus.Text = "✔ Запись сохранена (" .. #RecordedFrames .. " кадров)"
-				notify("Запись сохранена! B — воспроизвести")
-			end
-		end
-		if input.KeyCode == ReplayKeybind and State.HasRecord and not ReplayActive then
-			-- воспроизведение
-			ReplayActive = true
-			recStatus.TextColor3 = Color3.fromRGB(100,180,255)
-			recStatus.Text = "▶ Воспроизведение..."
-			notify("Ghost Replay: старт")
-			task.spawn(function()
-				for _, frame in ipairs(RecordedFrames) do
-					if not ReplayActive then break end
-					if RootPart and RootPart.Parent then
-						RootPart.CFrame = frame.CFrame
-					end
-					task.wait(frame.dt)
-				end
-				ReplayActive = false
-				recStatus.TextColor3 = Color3.fromRGB(100,200,100)
-				recStatus.Text = "✔ Запись сохранена (" .. #RecordedFrames .. " кадров)"
-				notify("Ghost Replay: завершён")
-			end)
-		end
-	end)
+	local recHint = Instance.new("TextLabel")
+	recHint.Size = UDim2.new(1, -14, 0, 14); recHint.Position = UDim2.new(0, 10, 0, 26)
+	recHint.BackgroundTransparency = 1; recHint.TextColor3 = Color3.fromRGB(65, 68, 95)
+	recHint.TextSize = 9; recHint.Font = Enum.Font.Gotham
+	recHint.Text = "V — начать/стоп   B — воспроизвести"
+	recHint.TextXAlignment = Enum.TextXAlignment.Left; recHint.Parent = recCard
+
+	-- Сохраняем ссылку для InputBegan
+	_G._AP_recStatus = recStatus
+
+	makeSection(f, "Настройки", 14)
+	makeToggle(f, "Показывать статус-оверлей", "Мини-панель с состоянием авто-прыжка (правый верх)",
+		function(on)
+			CONFIG.ShowStatusOverlay = on
+			statusOvF.Visible = on
+		end, 15)
 end
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                    ТАБ: ВИЗУАЛ                              │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  TAB: ВИЗУАЛ
+-- ══════════════════════════════════════════
 do
 	local f = tabFrames["Визуал"]
 
-	-- Fullbright
-	makeSection(f, "Освещение")
-	makeToggle(f, "Fullbright",
-		"Убирает темноту, делает всё ярким",
+	makeSection(f, "FPS", 1)
+
+	-- FPS тоггл (особый — включает виджет)
+	local fpsRow = Instance.new("Frame")
+	fpsRow.Size = UDim2.new(1, 0, 0, 50); fpsRow.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	fpsRow.BorderSizePixel = 0; fpsRow.LayoutOrder = 2; fpsRow.Parent = f
+	Instance.new("UICorner").Parent = fpsRow
+
+	local fpsStripe = Instance.new("Frame")
+	fpsStripe.Size = UDim2.new(0, 3, 0.7, 0); fpsStripe.Position = UDim2.new(0, 0, 0.15, 0)
+	fpsStripe.BackgroundColor3 = Color3.fromRGB(60, 200, 120); fpsStripe.BackgroundTransparency = 1
+	fpsStripe.BorderSizePixel = 0; fpsStripe.ZIndex = 2; fpsStripe.Parent = fpsRow
+	Instance.new("UICorner").Parent = fpsStripe
+
+	local fpsTogLbl = Instance.new("TextLabel")
+	fpsTogLbl.Size = UDim2.new(0.6, 0, 0, 18); fpsTogLbl.Position = UDim2.new(0, 12, 0, 7)
+	fpsTogLbl.BackgroundTransparency = 1; fpsTogLbl.TextColor3 = Color3.fromRGB(185, 190, 215)
+	fpsTogLbl.TextSize = 12; fpsTogLbl.Font = Enum.Font.GothamSemibold; fpsTogLbl.Text = "FPS счётчик"
+	fpsTogLbl.TextXAlignment = Enum.TextXAlignment.Left; fpsTogLbl.ZIndex = 2; fpsTogLbl.Parent = fpsRow
+
+	local fpsTogDesc = Instance.new("TextLabel")
+	fpsTogDesc.Size = UDim2.new(0.72, 0, 0, 14); fpsTogDesc.Position = UDim2.new(0, 12, 0, 27)
+	fpsTogDesc.BackgroundTransparency = 1; fpsTogDesc.TextColor3 = Color3.fromRGB(80, 85, 108)
+	fpsTogDesc.TextSize = 10; fpsTogDesc.Font = Enum.Font.Gotham
+	fpsTogDesc.Text = "Показывает FPS. Виджет можно перетащить мышью"
+	fpsTogDesc.TextXAlignment = Enum.TextXAlignment.Left; fpsTogDesc.TextWrapped = true
+	fpsTogDesc.ZIndex = 2; fpsTogDesc.Parent = fpsRow
+
+	local fpsSwBg = Instance.new("Frame")
+	fpsSwBg.Size = UDim2.new(0, 38, 0, 20); fpsSwBg.Position = UDim2.new(1, -48, 0.5, -10)
+	fpsSwBg.BackgroundColor3 = Color3.fromRGB(34, 34, 46); fpsSwBg.BorderSizePixel = 0
+	fpsSwBg.ZIndex = 3; fpsSwBg.Parent = fpsRow; Instance.new("UICorner").Parent = fpsSwBg
+
+	local fpsKnob = Instance.new("Frame")
+	fpsKnob.Size = UDim2.new(0, 14, 0, 14); fpsKnob.Position = UDim2.new(0, 3, 0.5, -7)
+	fpsKnob.BackgroundColor3 = Color3.fromRGB(115, 120, 148); fpsKnob.BorderSizePixel = 0
+	fpsKnob.ZIndex = 4; fpsKnob.Parent = fpsSwBg; Instance.new("UICorner").Parent = fpsKnob
+
+	local fpsSwBtn = Instance.new("TextButton")
+	fpsSwBtn.Size = UDim2.new(1, 0, 1, 0); fpsSwBtn.BackgroundTransparency = 1
+	fpsSwBtn.Text = ""; fpsSwBtn.AutoButtonColor = false; fpsSwBtn.ZIndex = 5; fpsSwBtn.Parent = fpsSwBg
+
+	local fpsRowBtn = Instance.new("TextButton")
+	fpsRowBtn.Size = UDim2.new(1, 0, 1, 0); fpsRowBtn.BackgroundTransparency = 1
+	fpsRowBtn.Text = ""; fpsRowBtn.AutoButtonColor = false; fpsRowBtn.ZIndex = 2; fpsRowBtn.Parent = fpsRow
+
+	local fpsEnabled = false
+	local function toggleFps()
+		fpsEnabled = not fpsEnabled; FPS_SHOWN = fpsEnabled
+		fpsWidget.Visible = fpsEnabled
+		if fpsEnabled then
+			tw(fpsSwBg,   {BackgroundColor3 = Color3.fromRGB(40, 190, 110)}, 0.2)
+			tw(fpsKnob,   {Position = UDim2.new(1, -17, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255,255,255)}, 0.2)
+			tw(fpsStripe, {BackgroundTransparency = 0}, 0.18)
+			tw(fpsTogLbl, {TextColor3 = Color3.fromRGB(220, 225, 245)}, 0.18)
+			tw(fpsRow,    {BackgroundColor3 = Color3.fromRGB(15, 24, 20)}, 0.18)
+			notify("FPS счётчик: ВКЛ", Color3.fromRGB(50, 200, 110))
+		else
+			tw(fpsSwBg,   {BackgroundColor3 = Color3.fromRGB(34, 34, 46)}, 0.2)
+			tw(fpsKnob,   {Position = UDim2.new(0, 3, 0.5, -7), BackgroundColor3 = Color3.fromRGB(115,120,148)}, 0.2)
+			tw(fpsStripe, {BackgroundTransparency = 1}, 0.18)
+			tw(fpsTogLbl, {TextColor3 = Color3.fromRGB(185, 190, 215)}, 0.18)
+			tw(fpsRow,    {BackgroundColor3 = Color3.fromRGB(19, 19, 26)}, 0.18)
+			notify("FPS счётчик: ВЫКЛ", Color3.fromRGB(200, 80, 80))
+		end
+	end
+	fpsSwBtn.MouseButton1Click:Connect(toggleFps)
+	fpsRowBtn.MouseButton1Click:Connect(toggleFps)
+	fpsRowBtn.MouseEnter:Connect(function() tw(fpsRow,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.12) end)
+	fpsRowBtn.MouseLeave:Connect(function() tw(fpsRow,{BackgroundColor3=Color3.fromRGB(19,19,26)},0.12) end)
+
+	makeSection(f, "Освещение", 3)
+	makeToggle(f, "Fullbright", "Убирает темноту, максимальная яркость",
 		function(on)
 			State.Fullbright = on
-			local lighting = game:GetService("Lighting")
 			if on then
-				lighting.Brightness = 10
-				lighting.ClockTime = 14
-				lighting.FogEnd = 100000
-				lighting.GlobalShadows = false
-				lighting.Ambient = Color3.fromRGB(255,255,255)
-				lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+				Lighting.Brightness = 10; Lighting.ClockTime = 14; Lighting.FogEnd = 100000
+				Lighting.GlobalShadows = false
+				Lighting.Ambient = Color3.fromRGB(255,255,255); Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
 			else
-				lighting.Brightness = 1
-				lighting.ClockTime = 14
-				lighting.FogEnd = 10000
-				lighting.GlobalShadows = true
-				lighting.Ambient = Color3.fromRGB(127,127,127)
-				lighting.OutdoorAmbient = Color3.fromRGB(127,127,127)
+				Lighting.Brightness = 1; Lighting.ClockTime = 14; Lighting.FogEnd = 10000
+				Lighting.GlobalShadows = true
+				Lighting.Ambient = Color3.fromRGB(127,127,127); Lighting.OutdoorAmbient = Color3.fromRGB(127,127,127)
 			end
 			notify(on and "Fullbright: ВКЛ" or "Fullbright: ВЫКЛ")
-		end, 1)
+		end, 4)
 
-	-- FOV
-	makeSection(f, "Камера")
-	makeToggle(f, "FOV Changer",
-		"Изменяет угол обзора камеры",
+	makeSection(f, "Камера", 5)
+	makeToggle(f, "FOV Changer", "Изменяет угол обзора камеры",
 		function(on)
 			State.FOVChanged = on
 			local cam = workspace.CurrentCamera
-			if cam then
-				cam.FieldOfView = on and CONFIG.FOV or 70
-			end
-			notify(on and "FOV изменён: " .. CONFIG.FOV or "FOV сброшен")
-		end, 2)
+			if cam then cam.FieldOfView = on and CONFIG.FOV or 70 end
+			notify(on and "FOV: " .. CONFIG.FOV .. "°" or "FOV сброшен")
+		end, 6)
 	makeSlider(f, "Field of View", 30, 120, CONFIG.FOVDefault, "°", function(v)
 		CONFIG.FOV = v
 		if State.FOVChanged then
-			local cam = workspace.CurrentCamera
-			if cam then cam.FieldOfView = v end
+			local cam = workspace.CurrentCamera; if cam then cam.FieldOfView = v end
 		end
-	end, 3)
+	end, 7)
 
-	-- ESP
-	makeSection(f, "ESP / Подсветка")
-	makeToggle(f, "Player ESP",
-		"Подсвечивает всех игроков на карте",
+	makeSection(f, "ESP / Подсветка", 8)
+	makeToggle(f, "Player ESP", "Подсвечивает игроков синим (через стены)",
 		function(on)
 			State.PlayerESP = on
+			if not on then
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p ~= Player and p.Character then
+						local h = p.Character:FindFirstChild("_PlayerHL"); if h then h:Destroy() end
+					end
+				end
+			end
 			notify(on and "Player ESP: ВКЛ" or "Player ESP: ВЫКЛ")
-		end, 4)
-	makeToggle(f, "Bot ESP",
-		"Подсвечивает ботов (NPC) красным цветом",
+		end, 9)
+	makeToggle(f, "Bot / NPC ESP", "Подсвечивает ботов и NPC красным",
 		function(on)
 			State.BotESP = on
+			if not on then
+				for _, d in ipairs(workspace:GetDescendants()) do
+					if d:IsA("Highlight") and d.Name == "_BotHL" then d:Destroy() end
+				end
+			end
 			notify(on and "Bot ESP: ВКЛ" or "Bot ESP: ВЫКЛ")
-		end, 5)
-	makeToggle(f, "Distance ESP",
-		"Показывает расстояние до объектов",
+		end, 10)
+	makeToggle(f, "Distance ESP", "Расстояние до каждого игрока над головой",
 		function(on)
 			State.DistanceESP = on
+			if not on then
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p.Character then
+						local r = p.Character:FindFirstChild("HumanoidRootPart")
+						if r then local b = r:FindFirstChild("_DistBG"); if b then b:Destroy() end end
+					end
+				end
+			end
 			notify(on and "Distance ESP: ВКЛ" or "Distance ESP: ВЫКЛ")
-		end, 6)
+		end, 11)
 
-	-- Визуальные эффекты
-	makeSection(f, "Визуальные эффекты")
-	makeToggle(f, "Rainbow Trail",
-		"Радужный след за персонажем",
-		function(on)
-			State.RainbowTrail = on
-			notify(on and "Rainbow Trail: ВКЛ" or "Rainbow Trail: ВЫКЛ")
-		end, 7)
-	makeToggle(f, "Spinbot (Visual)",
-		"Персонаж вращается вокруг своей оси",
+	makeSection(f, "Эффекты", 12)
+	makeToggle(f, "Rainbow Trail", "Радужный след за персонажем",
+		function(on) State.RainbowTrail = on; notify(on and "Rainbow Trail: ВКЛ" or "ВЫКЛ") end, 13)
+	makeToggle(f, "Spinbot", "Персонаж вращается вокруг оси",
 		function(on)
 			State.Spinbot = on
+			if not on then
+				local root = getChar() and getChar():FindFirstChild("HumanoidRootPart")
+				if root then local b = root:FindFirstChild("_SpinBAV"); if b then b:Destroy() end end
+			end
 			notify(on and "Spinbot: ВКЛ" or "Spinbot: ВЫКЛ")
-		end, 8)
-	makeToggle(f, "Fake Lag",
-		"Создаёт визуальные рывки персонажа",
-		function(on)
-			State.FakeLag = on
-			notify(on and "Fake Lag: ВКЛ" or "Fake Lag: ВЫКЛ")
-		end, 9)
+		end, 14)
+	makeToggle(f, "Fake Lag", "Рывки персонажа (видно другим)",
+		function(on) State.FakeLag = on; notify(on and "Fake Lag: ВКЛ" or "Fake Lag: ВЫКЛ") end, 15)
 end
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                     ТАБ: ИНФА                               │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  TAB: ИНФА
+-- ══════════════════════════════════════════
 do
 	local f = tabFrames["Инфа"]
-	makeSection(f, "Главное")
-	makeInfoCard(f, "Авто-прыжок у пола",
-		"Когда персонаж почти касается земли, он автоматически прыгает вверх. Сила регулируется слайдером.")
-	makeInfoCard(f, "Высокий прыжок",
-		"Увеличивает силу прыжка (JumpPower). Регулируется слайдером. Кнопка сброса возвращает стандартное значение.")
-	makeInfoCard(f, "Speed Hack",
-		"Меняет WalkSpeed персонажа. По умолчанию 16. Слайдер позволяет установить любое значение от 4 до 200.")
-	makeInfoCard(f, "Infinite Jump",
-		"Позволяет прыгать неограниченное количество раз, даже находясь в воздухе.")
-	makeInfoCard(f, "Bunny Hop",
-		"Автоматически прыгает каждый раз, когда персонаж касается земли — для быстрого передвижения.")
-	makeInfoCard(f, "Ghost Replay",
-		"V — начать запись движений. V снова — остановить. B — воспроизвести записанные движения. Камера не затрагивается.")
-	makeSection(f, "Визуал")
-	makeInfoCard(f, "Fullbright",
-		"Убирает тени и темноту, увеличивает яркость освещения до максимума.")
-	makeInfoCard(f, "FOV Changer",
-		"Изменяет угол обзора камеры (Field of View). Стандартное значение в Roblox — 70°.")
-	makeInfoCard(f, "Player / Bot ESP",
-		"Подсвечивает игроков и ботов через стены. Player = синий, Bot = красный.")
-	makeInfoCard(f, "Distance ESP",
-		"Показывает расстояние до ближайших объектов/ботов прямо на экране.")
-	makeInfoCard(f, "Rainbow Trail",
-		"Рисует радужный след за персонажем. Только визуальный эффект.")
-	makeInfoCard(f, "Spinbot",
-		"Персонаж вращается вокруг своей оси. Не влияет на управление.")
-	makeInfoCard(f, "Fake Lag",
-		"Имитирует лаг: персонаж движется рывками. Только визуальный эффект для наблюдателей.")
+	makeSection(f, "Главное", 1)
+	makeInfoCard(f,"Авто-прыжок у пола","Автоматический прыжок когда персонаж почти касается земли. CapsLock — быстрое вкл/выкл. По умолчанию сила: 16.",2)
+	makeInfoCard(f,"Высокий прыжок","Увеличивает JumpPower. Слайдер: 50–500. По умолчанию: 120.",3)
+	makeInfoCard(f,"Infinite Jump","Прыгать бесконечно в воздухе (пробел).",4)
+	makeInfoCard(f,"Bunny Hop","Авто-прыжок при каждом касании земли для скорости.",5)
+	makeInfoCard(f,"Speed Hack","WalkSpeed: 4–200. По умолчанию 16.",6)
+	makeInfoCard(f,"Ghost Replay","V — начать/остановить запись. B — воспроизвести. Камера свободна. Во время реплея движение заблокировано.",7)
+	makeSection(f, "Визуал", 8)
+	makeInfoCard(f,"FPS счётчик","Показывает текущий FPS. Зелёный ≥55, жёлтый ≥30, красный <30. Виджет перетаскивается мышью.",9)
+	makeInfoCard(f,"Fullbright","Убирает все тени и туман. Ambient = максимум.",10)
+	makeInfoCard(f,"FOV Changer","Угол обзора камеры. Стандарт Roblox — 70°.",11)
+	makeInfoCard(f,"Player / Bot ESP","Highlight на игроках (синий) и NPC/ботах (красный). Виден через стены.",12)
+	makeInfoCard(f,"Distance ESP","BillboardGui показывает расстояние над каждой целью.",13)
+	makeInfoCard(f,"Rainbow Trail","Радужный Trail-эффект за персонажем.",14)
+	makeInfoCard(f,"Spinbot","BodyAngularVelocity вращает персонажа. Не мешает управлению.",15)
+	makeInfoCard(f,"Fake Lag","Периодически снэпает позицию назад — выглядит как лаг для всех.",16)
 end
 
--- ┌─────────────────────────────────────────────────────────────┐
--- │                    ОСНОВНОЙ LOOP                            │
--- └─────────────────────────────────────────────────────────────┘
+-- ══════════════════════════════════════════
+--  RUNTIME LOOP
+-- ══════════════════════════════════════════
+local rainbowHue  = 0
+local trail       = nil
+local fakeLagTimer= 0
+local fakeLagSave = nil
+local spinAngle   = 0
 
--- Добавленный блок для клавиатуры (Caps Lock)
-UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == Enum.KeyCode.CapsLock then
-		State.AutoJump = not State.AutoJump
-		notify(State.AutoJump and "Авто-прыжок: ВКЛ (CapsLock)" or "Авто-прыжок: ВЫКЛ (CapsLock)")
+local function ensureHL(char, name, fill, outline)
+	if not char or not char.Parent then return end
+	local h = char:FindFirstChild(name)
+	if not h then
+		h = Instance.new("Highlight"); h.Name = name
+		h.FillColor = fill; h.OutlineColor = outline
+		h.FillTransparency = 0.55; h.OutlineTransparency = 0
+		h.Adornee = char; h.Parent = char
+	end
+end
+
+local function removeHL(char, name)
+	if not char then return end; local h = char:FindFirstChild(name); if h then h:Destroy() end
+end
+
+local function ensureDistBG(char)
+	local root = char and char:FindFirstChild("HumanoidRootPart"); if not root then return end
+	local bg = root:FindFirstChild("_DistBG")
+	if not bg then
+		bg = Instance.new("BillboardGui"); bg.Name = "_DistBG"
+		bg.Size = UDim2.new(0, 60, 0, 16); bg.StudsOffset = Vector3.new(0, 3.5, 0)
+		bg.AlwaysOnTop = true; bg.Parent = root
+		local lb = Instance.new("TextLabel"); lb.Name = "D"; lb.Size = UDim2.new(1,0,1,0)
+		lb.BackgroundTransparency = 1; lb.TextColor3 = Color3.fromRGB(80, 200, 255)
+		lb.TextSize = 11; lb.Font = Enum.Font.GothamBold; lb.Text = "?m"; lb.Parent = bg
+	end
+	return bg
+end
+
+local function createTrail()
+	local root = getChar() and getChar():FindFirstChild("HumanoidRootPart"); if not root then return end
+	if trail then trail:Destroy(); trail = nil end
+	local a0 = Instance.new("Attachment"); a0.Position = Vector3.new(0,1,0); a0.Parent = root
+	local a1 = Instance.new("Attachment"); a1.Position = Vector3.new(0,-1,0); a1.Parent = root
+	trail = Instance.new("Trail"); trail.Attachment0 = a0; trail.Attachment1 = a1
+	trail.Lifetime = 0.7; trail.MinLength = 0; trail.Parent = root
+end
+
+-- Bot ESP в отдельном потоке (не каждый кадр)
+task.spawn(function()
+	while true do task.wait(0.6)
+		if State.BotESP then
+			local char = getChar()
+			for _, model in ipairs(workspace:GetChildren()) do
+				if model:IsA("Model") and model ~= char then
+					local mHum = model:FindFirstChildOfClass("Humanoid")
+					if mHum then
+						local isPlayer = false
+						for _, p in ipairs(Players:GetPlayers()) do
+							if p.Character == model then isPlayer = true; break end
+						end
+						if not isPlayer then
+							ensureHL(model, "_BotHL", Color3.fromRGB(255,60,60), Color3.fromRGB(255,120,120))
+						end
+					end
+				end
+			end
+		end
 	end
 end)
 
-local lastPos = nil
-local spinAngle = 0
-local fakelagTimer = 0
-local rainbowHue = 0
-local trail = nil
-
--- Создание следа
-local function createTrail()
-	if not Character or not RootPart then return end
-	if trail then trail:Destroy() end
-	local att0 = Instance.new("Attachment", RootPart)
-	att0.Position = Vector3.new(0, 1, 0)
-	local att1 = Instance.new("Attachment", RootPart)
-	att1.Position = Vector3.new(0, -1, 0)
-	trail = Instance.new("Trail")
-	trail.Attachment0 = att0
-	trail.Attachment1 = att1
-	trail.Lifetime = 0.8
-	trail.MinLength = 0
-	trail.Parent = RootPart
-end
-
 RunService.Heartbeat:Connect(function(dt)
-	-- обновить ссылки
-	Character = Player.Character
-	if not Character then return end
-	local hum = Character:FindFirstChild("Humanoid")
-	local root = Character:FindFirstChild("HumanoidRootPart")
+	local char = getChar(); if not char then return end
+	local hum  = char:FindFirstChild("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
 	if not hum or not root then return end
 
-	-- Запись движений
+	-- Запись
 	if State.Recording then
-		local prev = lastPos
-		lastPos = root.CFrame
 		table.insert(RecordedFrames, {CFrame = root.CFrame, dt = dt})
 	end
 
-	-- Авто-прыжок у пола
-	if State.AutoJump then
-		local ray = workspace:Raycast(root.Position, Vector3.new(0,-CONFIG.AutoJumpThreshold,0))
-		if ray and hum.FloorMaterial ~= Enum.Material.Air then
+	-- Авто-прыжок (пассивный, от пола)
+	if State.AutoJump and hum.FloorMaterial ~= Enum.Material.Air then
+		local ray = workspace:Raycast(root.Position, Vector3.new(0, -CONFIG.AutoJumpThreshold, 0))
+		if ray then
 			hum:ChangeState(Enum.HumanoidStateType.Jumping)
 			root.AssemblyLinearVelocity = Vector3.new(
-				root.AssemblyLinearVelocity.X,
-				CONFIG.AutoJumpHeight,
-				root.AssemblyLinearVelocity.Z
-			)
+				root.AssemblyLinearVelocity.X, CONFIG.AutoJumpHeight, root.AssemblyLinearVelocity.Z)
 		end
 	end
 
@@ -1026,58 +1082,54 @@ RunService.Heartbeat:Connect(function(dt)
 
 	-- Spinbot
 	if State.Spinbot then
-		spinAngle = (spinAngle + 8) % 360
-		root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(spinAngle), 0)
+		spinAngle = (spinAngle + 6) % 360
+		root.CFrame = CFrame.new(root.Position) * CFrame.fromEulerAnglesXYZ(0, math.rad(spinAngle), 0)
 	end
 
 	-- Fake Lag
 	if State.FakeLag then
-		fakelagTimer = fakelagTimer + dt
-		if fakelagTimer >= 0.1 then
-			fakelagTimer = 0
-			task.wait(0.05)
+		fakeLagTimer = fakeLagTimer + dt
+		if fakeLagTimer >= 0.12 then
+			fakeLagTimer = 0; fakeLagSave = root.CFrame
+			task.delay(0.06, function()
+				local c2 = getChar(); local r2 = c2 and c2:FindFirstChild("HumanoidRootPart")
+				if r2 and State.FakeLag and fakeLagSave then r2.CFrame = fakeLagSave end
+			end)
 		end
 	end
 
 	-- Rainbow Trail
 	if State.RainbowTrail then
 		if not trail or not trail.Parent then createTrail() end
-		rainbowHue = (rainbowHue + dt * 0.5) % 1
+		rainbowHue = (rainbowHue + dt * 0.35) % 1
 		if trail then
 			trail.Color = ColorSequence.new{
 				ColorSequenceKeypoint.new(0, Color3.fromHSV(rainbowHue, 1, 1)),
-				ColorSequenceKeypoint.new(1, Color3.fromHSV((rainbowHue+0.5)%1, 1, 1))
+				ColorSequenceKeypoint.new(1, Color3.fromHSV((rainbowHue + 0.5) % 1, 1, 1))
 			}
 		end
-	elseif trail and trail.Parent then
-		trail:Destroy()
-		trail = nil
+	else
+		if trail and trail.Parent then trail:Destroy(); trail = nil end
 	end
 
-	-- ESP рендер
-	if State.PlayerESP or State.BotESP or State.DistanceESP then
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p ~= Player and p.Character then
-				local pr = p.Character:FindFirstChild("HumanoidRootPart")
-				if pr then
-					-- подсветка через SelectionBox
-					local box = pr:FindFirstChild("_ESPBox")
-					if not box then
-						box = Instance.new("SelectionBox")
-						box.Name = "_ESPBox"
-						box.Adornee = p.Character
-						box.Parent = pr
-					end
-					if State.PlayerESP then
-						box.Color3 = Color3.fromRGB(80,200,255)
-						box.LineThickness = 0.05
-						box.SurfaceTransparency = 0.85
-						box.SurfaceColor3 = Color3.fromRGB(80,200,255)
-						box.Visible = true
-					elseif box then
-						box.Visible = false
-					end
+	-- Player ESP + Distance
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= Player and p.Character then
+			local pChar = p.Character
+			local pRoot = pChar:FindFirstChild("HumanoidRootPart")
+			if State.PlayerESP then
+				ensureHL(pChar, "_PlayerHL", Color3.fromRGB(50,150,255), Color3.fromRGB(90,190,255))
+			else
+				removeHL(pChar, "_PlayerHL")
+			end
+			if State.DistanceESP and pRoot then
+				local bg = ensureDistBG(pChar)
+				if bg then
+					local dl = bg:FindFirstChild("D")
+					if dl then dl.Text = math.floor((root.Position - pRoot.Position).Magnitude) .. "m" end
 				end
+			else
+				if pRoot then local b = pRoot:FindFirstChild("_DistBG"); if b then b:Destroy() end end
 			end
 		end
 	end
@@ -1086,28 +1138,82 @@ end)
 -- Infinite Jump
 UserInputService.JumpRequest:Connect(function()
 	if State.InfiniteJump then
-		local hum = Character and Character:FindFirstChild("Humanoid")
-		if hum then
-			hum:ChangeState(Enum.HumanoidStateType.Jumping)
-		end
+		local h = getChar() and getChar():FindFirstChild("Humanoid")
+		if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
 	end
 end)
 
--- Перепривязка персонажа после respawn
+-- Input Handler
+UserInputService.InputBegan:Connect(function(inp, gpe)
+	if gpe then return end
+
+	-- CapsLock → авто-прыжок
+	if inp.KeyCode == Enum.KeyCode.CapsLock then
+		State.AutoJump = not State.AutoJump
+		updateStatusOverlay()
+		notify(State.AutoJump and "Авто-прыжок: ВКЛ" or "Авто-прыжок: ВЫКЛ")
+		return
+	end
+
+	-- V → запись
+	if inp.KeyCode == RecordKeybind then
+		if not State.Recording then
+			State.Recording = true; RecordedFrames = {}
+			local rs = _G._AP_recStatus
+			if rs then rs.TextColor3 = Color3.fromRGB(200,60,60); rs.Text = "⏺ Запись... (V — стоп)" end
+			notify("Запись начата — V остановить", Color3.fromRGB(200,60,60))
+		else
+			State.Recording = false; State.HasRecord = #RecordedFrames > 0
+			local rs = _G._AP_recStatus
+			if rs then rs.TextColor3 = Color3.fromRGB(55,200,100)
+				rs.Text = "✔ Готово (" .. #RecordedFrames .. " кадров)  B — воспроизвести" end
+			notify("Запись сохранена! " .. #RecordedFrames .. " кадров", Color3.fromRGB(55,200,100))
+		end
+		return
+	end
+
+	-- B → воспроизвести
+	if inp.KeyCode == ReplayKeybind and State.HasRecord and not ReplayActive then
+		ReplayActive = true
+		local rs = _G._AP_recStatus
+		if rs then rs.TextColor3 = Color3.fromRGB(70,140,255); rs.Text = "▶ Воспроизведение..." end
+		notify("Ghost Replay: старт", Color3.fromRGB(70,140,255))
+		task.spawn(function()
+			local char = getChar()
+			local hum2 = char and char:FindFirstChild("Humanoid")
+			local savedWS = hum2 and hum2.WalkSpeed or 16
+			local savedJP = hum2 and hum2.JumpPower  or 50
+			if hum2 then hum2.WalkSpeed = 0; hum2.JumpPower = 0 end
+			for _, frame in ipairs(RecordedFrames) do
+				if not ReplayActive then break end
+				local root2 = getChar() and getChar():FindFirstChild("HumanoidRootPart")
+				if root2 then root2.CFrame = frame.CFrame end
+				task.wait(frame.dt)
+			end
+			ReplayActive = false
+			if hum2 then hum2.WalkSpeed = savedWS; hum2.JumpPower = savedJP end
+			if rs then rs.TextColor3 = Color3.fromRGB(55,200,100); rs.Text = "✔ Завершено   B — повторить" end
+			notify("Ghost Replay: завершён", Color3.fromRGB(55,200,100))
+		end)
+	end
+end)
+
+-- Respawn
 Player.CharacterAdded:Connect(function(char)
 	Character = char
-	Humanoid = char:WaitForChild("Humanoid")
-	RootPart = char:WaitForChild("HumanoidRootPart")
-	trail = nil
-	-- восстановить настройки
+	Humanoid  = char:WaitForChild("Humanoid")
+	RootPart  = char:WaitForChild("HumanoidRootPart")
+	trail = nil; ReplayActive = false
 	if State.SpeedHack then Humanoid.WalkSpeed = CONFIG.WalkSpeed end
 	if State.HighJump   then Humanoid.JumpPower = CONFIG.HighJumpPower end
 end)
 
--- Анимация появления панели
-Main.Size = UDim2.new(0,520,0,0)
-Main.Position = UDim2.new(0.5,-260,0.5,0)
-tween(Main, {Size = UDim2.new(0,520,0,420), Position = UDim2.new(0.5,-260,0.5,-210)}, 0.4)
+-- ══════════════════════════════════════════
+--  ПОЯВЛЕНИЕ ПАНЕЛИ
+-- ══════════════════════════════════════════
+Main.Size = UDim2.new(0, WINW, 0, 0)
+Main.Position = UDim2.new(0.5, -WINW/2, 0.5, 0)
+tw(Main, {Size = UDim2.new(0,WINW,0,WINH), Position = UDim2.new(0.5,-WINW/2,0.5,-WINH/2)}, 0.35, Enum.EasingStyle.Back)
 
-notify("Admin Panel загружен! ✔")
-print("[AdminPanel] Загружен успешно.")
+notify("Admin Panel v4 загружен ✔", Color3.fromRGB(70, 140, 255))
+print("[AdminPanel v4] OK")
