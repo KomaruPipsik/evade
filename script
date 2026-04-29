@@ -27,8 +27,49 @@ local CONFIG = {
 	WalkSpeedDefault  = 16,
 	FOV               = 70,
 	FOVDefault        = 70,
-	ShowStatusOverlay = true,
+	ShowStatusOverlay = false,
+	SpinSpeed         = 6,
 }
+
+-- Keybinds (nil = нет клавиши)
+local Keybinds = {
+	AutoJump     = nil,
+	SpeedHack    = nil,
+	InfiniteJump = nil,
+	BunnyHop     = nil,
+	StopReplay   = nil,
+}
+local BindBtnRefs = {}   -- bindKey -> TextButton (чтобы обновлять текст)
+local ToggleSetters = {} -- stateKey -> function(bool)
+
+local MOUSE_TYPES = {
+	Enum.UserInputType.MouseButton1,
+	Enum.UserInputType.MouseButton2,
+	Enum.UserInputType.MouseButton3,
+}
+local MOUSE_NAMES = {
+	[Enum.UserInputType.MouseButton1] = "ЛКМ",
+	[Enum.UserInputType.MouseButton2] = "ПКМ",
+	[Enum.UserInputType.MouseButton3] = "СКМ",
+}
+local function bindName(b)
+	if not b then return "—" end
+	if b.type == "key" then return b.value.Name end
+	return MOUSE_NAMES[b.value] or "?"
+end
+local function bindMatches(b, inp)
+	if not b then return false end
+	if b.type == "key" and inp.UserInputType == Enum.UserInputType.Keyboard then
+		return inp.KeyCode == b.value
+	elseif b.type == "mouse" then
+		return inp.UserInputType == b.value
+	end
+	return false
+end
+
+-- Presets
+local Presets = {}
+local PresetListHolder = nil  -- будет заполнен позже
 
 -- ══════════════════════════════════════════
 --  STATE
@@ -49,6 +90,9 @@ local State = {
 	FakeLag      = false,
 	Recording    = false,
 	HasRecord    = false,
+	CorbloxFeet  = false,
+	HeadloxHead  = false,
+	CursorUnlock = false,
 }
 
 local RecordedFrames = {}
@@ -92,13 +136,13 @@ local function notify(text, color)
 	local ico = Instance.new("TextLabel")
 	ico.Size = UDim2.new(0, 20, 1, 0); ico.Position = UDim2.new(0, 7, 0, 0)
 	ico.BackgroundTransparency = 1; ico.Text = "●"
-	ico.TextColor3 = color; ico.TextSize = 10; ico.Font = Enum.Font.GothamBold
+	ico.TextColor3 = color; ico.TextSize = 10; ico.Font = Enum.Font.SourceSansBold
 	ico.Parent = f
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, -32, 1, 0); lbl.Position = UDim2.new(0, 30, 0, 0)
 	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(205, 210, 228)
-	lbl.TextSize = 12; lbl.Font = Enum.Font.GothamSemibold
+	lbl.TextSize = 12; lbl.Font = Enum.Font.SourceSansSemibold
 	lbl.Text = text; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = f
 
 	tw(f, {Position = UDim2.new(1, -275, 1, -58)}, 0.28, Enum.EasingStyle.Back)
@@ -177,7 +221,7 @@ titleBar.BorderSizePixel = 0; titleBar.ZIndex = 5; titleBar.Parent = Main
 local titleLbl = Instance.new("TextLabel")
 titleLbl.Size = UDim2.new(1, -80, 1, 0); titleLbl.Position = UDim2.new(0, 14, 0, 0)
 titleLbl.BackgroundTransparency = 1; titleLbl.TextColor3 = Color3.fromRGB(200, 205, 225)
-titleLbl.TextSize = 13; titleLbl.Font = Enum.Font.GothamBold
+titleLbl.TextSize = 13; titleLbl.Font = Enum.Font.SourceSansBold
 titleLbl.Text = "⚙  Admin Panel"; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 titleLbl.ZIndex = 6; titleLbl.Parent = titleBar
 
@@ -187,7 +231,7 @@ local function makeWinBtn(xOff, bg, icon)
 	b.Size = UDim2.new(0, 22, 0, 22); b.Position = UDim2.new(1, xOff, 0.5, -11)
 	b.BackgroundColor3 = bg; b.Text = icon
 	b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 11
-	b.Font = Enum.Font.GothamBold; b.BorderSizePixel = 0
+	b.Font = Enum.Font.SourceSansBold; b.BorderSizePixel = 0
 	b.AutoButtonColor = false; b.ZIndex = 7; b.Parent = titleBar
 	Instance.new("UICorner").Parent = b
 	b.MouseEnter:Connect(function() tw(b, {BackgroundTransparency = 0.35}, 0.1) end)
@@ -209,7 +253,7 @@ local showBtn = Instance.new("TextButton")
 showBtn.Size = UDim2.new(0, 100, 0, 26); showBtn.Position = UDim2.new(0, 10, 0, 10)
 showBtn.BackgroundColor3 = Color3.fromRGB(17, 17, 23); showBtn.Text = "⚙ Admin Panel"
 showBtn.TextColor3 = Color3.fromRGB(130, 170, 255); showBtn.TextSize = 11
-showBtn.Font = Enum.Font.GothamBold; showBtn.BorderSizePixel = 0
+showBtn.Font = Enum.Font.SourceSansBold; showBtn.BorderSizePixel = 0
 showBtn.ZIndex = 20; showBtn.Visible = false; showBtn.Parent = ScreenGui
 Instance.new("UICorner").Parent = showBtn
 
@@ -239,12 +283,6 @@ navLine.Size = UDim2.new(1, 0, 0, 1); navLine.Position = UDim2.new(0, 0, 1, 0)
 navLine.BackgroundColor3 = Color3.fromRGB(28, 30, 46); navLine.BorderSizePixel = 0
 navLine.ZIndex = 5; navLine.Parent = navBar
 
-do
-	local ll = Instance.new("UIListLayout"); ll.FillDirection = Enum.FillDirection.Horizontal
-	ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Parent = navBar
-	local lp = Instance.new("UIPadding"); lp.PaddingLeft = UDim.new(0, 4); lp.Parent = navBar
-end
-
 -- Content zone
 local contentZone = Instance.new("Frame")
 contentZone.Size = UDim2.new(1, 0, 1, -74); contentZone.Position = UDim2.new(0, 0, 0, 74)
@@ -270,10 +308,13 @@ end
 for i, name in ipairs(tabNames) do
 	tabFrames[name] = makeTabFrame(name)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 110, 1, 0); btn.BackgroundTransparency = 1
+	-- ФИКСИРОВАННАЯ позиция: каждая кнопка ровно 25% ширины
+	btn.Size = UDim2.new(0.25, 0, 1, 0)
+	btn.Position = UDim2.new(0.25 * (i - 1), 0, 0, 0)
+	btn.BackgroundTransparency = 1
 	btn.Text = name; btn.TextColor3 = Color3.fromRGB(100, 105, 128)
-	btn.TextSize = 12; btn.Font = Enum.Font.GothamSemibold
-	btn.LayoutOrder = i; btn.ZIndex = 6; btn.AutoButtonColor = false; btn.Parent = navBar
+	btn.TextSize = 12; btn.Font = Enum.Font.SourceSansSemibold
+	btn.ZIndex = 6; btn.AutoButtonColor = false; btn.Parent = navBar
 	local ind = Instance.new("Frame")
 	ind.Size = UDim2.new(0, 0, 0, 2); ind.Position = UDim2.new(0.5, 0, 1, -2)
 	ind.AnchorPoint = Vector2.new(0.5, 0); ind.BackgroundColor3 = Color3.fromRGB(70, 140, 255)
@@ -296,7 +337,7 @@ local function switchTab(name)
 		tabBtns[n].ind.Size     = on and UDim2.new(0.62, 0, 0, 2) or UDim2.new(0, 0, 0, 2)
 		tabBtns[n].ind.Position = on and UDim2.new(0.19, 0, 1, -2) or UDim2.new(0.5, 0, 1, -2)
 		tabBtns[n].btn.TextColor3 = on and Color3.fromRGB(70, 140, 255) or Color3.fromRGB(100, 105, 128)
-		tabBtns[n].btn.Font = on and Enum.Font.GothamBold or Enum.Font.GothamSemibold
+		tabBtns[n].btn.Font = on and Enum.Font.SourceSansBold or Enum.Font.SourceSansSemibold
 	end
 end
 
@@ -319,22 +360,21 @@ local function makeSection(parent, title, order)
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, 0, 1, 0); lbl.BackgroundTransparency = 1
 	lbl.TextColor3 = Color3.fromRGB(60, 120, 255); lbl.TextSize = 9
-	lbl.Font = Enum.Font.GothamBold; lbl.Text = "  " .. title:upper()
+	lbl.Font = Enum.Font.SourceSansBold; lbl.Text = "  " .. title:upper()
 	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = f
 	local line = Instance.new("Frame")
 	line.Size = UDim2.new(1, 0, 0, 1); line.Position = UDim2.new(0, 0, 1, -1)
 	line.BackgroundColor3 = Color3.fromRGB(28, 30, 50); line.BorderSizePixel = 0; line.Parent = f
 end
 
--- Тоггл  (ИСПРАВЛЕННЫЙ — btn только на свитче, rowBtn для hover на всей строке)
-local function makeToggle(parent, label, desc, onToggle, order)
+-- Тоггл
+local function makeToggle(parent, label, desc, onToggle, order, stateKey)
 	local row = Instance.new("Frame")
 	row.Name = label; row.Size = UDim2.new(1, 0, 0, 50)
 	row.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
 	row.BorderSizePixel = 0; row.LayoutOrder = order or 0; row.Parent = parent
 	Instance.new("UICorner").Parent = row
 
-	-- левая цветная полоска (появляется при включении)
 	local stripe = Instance.new("Frame")
 	stripe.Size = UDim2.new(0, 3, 0.7, 0); stripe.Position = UDim2.new(0, 0, 0.15, 0)
 	stripe.BackgroundColor3 = Color3.fromRGB(70, 140, 255)
@@ -344,17 +384,16 @@ local function makeToggle(parent, label, desc, onToggle, order)
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(0.6, 0, 0, 18); lbl.Position = UDim2.new(0, 12, 0, 7)
 	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(185, 190, 215)
-	lbl.TextSize = 12; lbl.Font = Enum.Font.GothamSemibold; lbl.Text = label
+	lbl.TextSize = 12; lbl.Font = Enum.Font.SourceSansSemibold; lbl.Text = label
 	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 2; lbl.Parent = row
 
 	local descL = Instance.new("TextLabel")
 	descL.Size = UDim2.new(0.72, 0, 0, 14); descL.Position = UDim2.new(0, 12, 0, 27)
 	descL.BackgroundTransparency = 1; descL.TextColor3 = Color3.fromRGB(80, 85, 108)
-	descL.TextSize = 10; descL.Font = Enum.Font.Gotham; descL.Text = desc
+	descL.TextSize = 10; descL.Font = Enum.Font.SourceSans; descL.Text = desc
 	descL.TextXAlignment = Enum.TextXAlignment.Left; descL.TextWrapped = true
 	descL.ZIndex = 2; descL.Parent = row
 
-	-- Switch background
 	local swBg = Instance.new("Frame")
 	swBg.Size = UDim2.new(0, 38, 0, 20); swBg.Position = UDim2.new(1, -48, 0.5, -10)
 	swBg.BackgroundColor3 = Color3.fromRGB(34, 34, 46); swBg.BorderSizePixel = 0
@@ -365,20 +404,20 @@ local function makeToggle(parent, label, desc, onToggle, order)
 	knob.BackgroundColor3 = Color3.fromRGB(115, 120, 148); knob.BorderSizePixel = 0
 	knob.ZIndex = 4; knob.Parent = swBg; Instance.new("UICorner").Parent = knob
 
-	-- кнопка ТОЛЬКО на области свитча
 	local swBtn = Instance.new("TextButton")
 	swBtn.Size = UDim2.new(1, 0, 1, 0); swBtn.BackgroundTransparency = 1
 	swBtn.Text = ""; swBtn.AutoButtonColor = false; swBtn.ZIndex = 5; swBtn.Parent = swBg
 
-	-- невидимая кнопка на весь ряд (только hover)
+	-- hover-зона только на левой части (НЕ захватывает свитч)
 	local rowBtn = Instance.new("TextButton")
-	rowBtn.Size = UDim2.new(1, 0, 1, 0); rowBtn.BackgroundTransparency = 1
-	rowBtn.Text = ""; rowBtn.AutoButtonColor = false; rowBtn.ZIndex = 2; rowBtn.Parent = row
+	rowBtn.Size = UDim2.new(1, -56, 1, 0); rowBtn.Position = UDim2.new(0, 0, 0, 0)
+	rowBtn.BackgroundTransparency = 1; rowBtn.Text = ""
+	rowBtn.AutoButtonColor = false; rowBtn.ZIndex = 2; rowBtn.Parent = row
 
 	local enabled = false
-	local function doToggle()
-		enabled = not enabled
-		if enabled then
+	local function setVal(on)
+		enabled = on
+		if on then
 			tw(swBg,   {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.2)
 			tw(knob,   {Position = UDim2.new(1, -17, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.2)
 			tw(stripe, {BackgroundTransparency = 0}, 0.18)
@@ -391,24 +430,19 @@ local function makeToggle(parent, label, desc, onToggle, order)
 			tw(lbl,    {TextColor3 = Color3.fromRGB(185, 190, 215)}, 0.18)
 			tw(row,    {BackgroundColor3 = Color3.fromRGB(19, 19, 26)}, 0.18)
 		end
-		onToggle(enabled)
+		onToggle(on)
 	end
-
+	local function doToggle() setVal(not enabled) end
 	swBtn.MouseButton1Click:Connect(doToggle)
 	rowBtn.MouseButton1Click:Connect(doToggle)
-
 	rowBtn.MouseEnter:Connect(function()
-		tw(row, {BackgroundColor3 = enabled
-			and Color3.fromRGB(21, 25, 42)
-			or  Color3.fromRGB(22, 22, 30)}, 0.12)
+		tw(row, {BackgroundColor3 = enabled and Color3.fromRGB(21, 25, 42) or Color3.fromRGB(22, 22, 30)}, 0.12)
 	end)
 	rowBtn.MouseLeave:Connect(function()
-		tw(row, {BackgroundColor3 = enabled
-			and Color3.fromRGB(19, 22, 38)
-			or  Color3.fromRGB(19, 19, 26)}, 0.12)
+		tw(row, {BackgroundColor3 = enabled and Color3.fromRGB(19, 22, 38) or Color3.fromRGB(19, 19, 26)}, 0.12)
 	end)
-
-	return row, function() return enabled end
+	if stateKey then ToggleSetters[stateKey] = setVal end
+	return row
 end
 
 -- Слайдер
@@ -421,20 +455,20 @@ local function makeSlider(parent, label, minV, maxV, default, unit, onChange, or
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(0.55, 0, 0, 16); lbl.Position = UDim2.new(0, 10, 0, 4)
 	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(165, 170, 200)
-	lbl.TextSize = 11; lbl.Font = Enum.Font.GothamSemibold; lbl.Text = label
+	lbl.TextSize = 11; lbl.Font = Enum.Font.SourceSansSemibold; lbl.Text = label
 	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = row
 
 	local valLbl = Instance.new("TextLabel")
 	valLbl.Size = UDim2.new(0.4, 0, 0, 16); valLbl.Position = UDim2.new(0.58, 0, 0, 4)
 	valLbl.BackgroundTransparency = 1; valLbl.TextColor3 = Color3.fromRGB(70, 140, 255)
-	valLbl.TextSize = 11; valLbl.Font = Enum.Font.GothamBold
+	valLbl.TextSize = 11; valLbl.Font = Enum.Font.SourceSansBold
 	valLbl.Text = tostring(default) .. (unit or "")
 	valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = row
 
 	local defLbl = Instance.new("TextLabel")
 	defLbl.Size = UDim2.new(1, -20, 0, 11); defLbl.Position = UDim2.new(0, 10, 0, 40)
 	defLbl.BackgroundTransparency = 1; defLbl.TextColor3 = Color3.fromRGB(58, 62, 85)
-	defLbl.TextSize = 9; defLbl.Font = Enum.Font.Gotham
+	defLbl.TextSize = 9; defLbl.Font = Enum.Font.SourceSans
 	defLbl.Text = "По умолчанию: " .. tostring(default)
 	defLbl.TextXAlignment = Enum.TextXAlignment.Left; defLbl.Parent = row
 
@@ -503,14 +537,61 @@ local function makeInfoCard(parent, title, text, order)
 	local t = Instance.new("TextLabel")
 	t.Size = UDim2.new(1, 0, 0, 14); t.BackgroundTransparency = 1
 	t.TextColor3 = Color3.fromRGB(70, 135, 255); t.TextSize = 11
-	t.Font = Enum.Font.GothamBold; t.Text = title
+	t.Font = Enum.Font.SourceSansBold; t.Text = title
 	t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = row
 	local d = Instance.new("TextLabel")
 	d.Size = UDim2.new(1, 0, 0, 0); d.Position = UDim2.new(0, 0, 0, 16)
 	d.AutomaticSize = Enum.AutomaticSize.Y; d.BackgroundTransparency = 1
 	d.TextColor3 = Color3.fromRGB(130, 135, 165); d.TextSize = 10
-	d.Font = Enum.Font.Gotham; d.Text = text
+	d.Font = Enum.Font.SourceSans; d.Text = text
 	d.TextXAlignment = Enum.TextXAlignment.Left; d.TextWrapped = true; d.Parent = row
+end
+
+-- Строка назначения клавиши
+local function makeBindRow(parent, label, bindKey, order)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 32); row.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	row.BorderSizePixel = 0; row.LayoutOrder = order or 0; row.Parent = parent
+	Instance.new("UICorner").Parent = row
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(0.55, 0, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0)
+	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(120, 125, 150)
+	lbl.TextSize = 11; lbl.Font = Enum.Font.SourceSans; lbl.Text = label
+	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = row
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 80, 0, 22); btn.Position = UDim2.new(1, -88, 0.5, -11)
+	btn.BackgroundColor3 = Color3.fromRGB(28, 32, 52); btn.Text = bindName(Keybinds[bindKey])
+	btn.TextColor3 = Color3.fromRGB(70, 140, 255); btn.TextSize = 11
+	btn.Font = Enum.Font.SourceSansBold; btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false; btn.ZIndex = 2; btn.Parent = row
+	Instance.new("UICorner").Parent = btn
+	BindBtnRefs[bindKey] = btn
+	local listening = false
+	btn.MouseButton1Click:Connect(function()
+		if listening then return end
+		listening = true; btn.Text = "..."
+		tw(btn, {BackgroundColor3 = Color3.fromRGB(42, 48, 80)}, 0.1)
+		local conn
+		conn = UserInputService.InputBegan:Connect(function(inp, gpe)
+			if gpe then return end
+			local b = nil
+			if inp.UserInputType == Enum.UserInputType.Keyboard then
+				b = {type = "key", value = inp.KeyCode}
+			else
+				for _, mt in ipairs(MOUSE_TYPES) do
+					if inp.UserInputType == mt then b = {type = "mouse", value = mt} break end
+				end
+			end
+			if b then
+				conn:Disconnect(); listening = false
+				Keybinds[bindKey] = b; btn.Text = bindName(b)
+				tw(btn, {BackgroundColor3 = Color3.fromRGB(28, 32, 52)}, 0.1)
+				notify("Клавиша: " .. bindName(b))
+			end
+		end)
+	end)
+	btn.MouseEnter:Connect(function() if not listening then tw(btn, {BackgroundColor3 = Color3.fromRGB(34, 40, 64)}, 0.1) end end)
+	btn.MouseLeave:Connect(function() if not listening then tw(btn, {BackgroundColor3 = Color3.fromRGB(28, 32, 52)}, 0.1) end end)
 end
 
 -- ══════════════════════════════════════════
@@ -524,7 +605,7 @@ statusOvF.Position = UDim2.new(1, -155, 0, 55)
 statusOvF.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
 statusOvF.BackgroundTransparency = 0.15
 statusOvF.BorderSizePixel = 0; statusOvF.ZIndex = 30
-statusOvF.Visible = CONFIG.ShowStatusOverlay
+statusOvF.Visible = false   -- скрыт по умолчанию, включается в настройках
 statusOvF.Parent = ScreenGui
 Instance.new("UICorner").Parent = statusOvF
 
@@ -544,7 +625,7 @@ end
 local ovTitle = Instance.new("TextLabel")
 ovTitle.Size = UDim2.new(1, -10, 0, 13); ovTitle.Position = UDim2.new(0, 8, 0, 5)
 ovTitle.BackgroundTransparency = 1; ovTitle.TextColor3 = Color3.fromRGB(60, 120, 255)
-ovTitle.TextSize = 8; ovTitle.Font = Enum.Font.GothamBold
+ovTitle.TextSize = 8; ovTitle.Font = Enum.Font.SourceSansBold
 ovTitle.Text = "СТАТУС ФУНКЦИЙ"; ovTitle.TextXAlignment = Enum.TextXAlignment.Left
 ovTitle.ZIndex = 31; ovTitle.Parent = statusOvF
 
@@ -561,7 +642,7 @@ ovDot.ZIndex = 32; ovDot.Parent = ovRow; Instance.new("UICorner").Parent = ovDot
 local ovLbl = Instance.new("TextLabel")
 ovLbl.Size = UDim2.new(1, -14, 1, 0); ovLbl.Position = UDim2.new(0, 13, 0, 0)
 ovLbl.BackgroundTransparency = 1; ovLbl.TextColor3 = Color3.fromRGB(105, 110, 138)
-ovLbl.TextSize = 10; ovLbl.Font = Enum.Font.GothamSemibold
+ovLbl.TextSize = 10; ovLbl.Font = Enum.Font.SourceSansSemibold
 ovLbl.Text = "Авто-прыжок у пола"; ovLbl.TextXAlignment = Enum.TextXAlignment.Left
 ovLbl.ZIndex = 32; ovLbl.Parent = ovRow
 
@@ -597,13 +678,13 @@ Instance.new("UICorner").Parent = fpsLine
 local fpsTitle = Instance.new("TextLabel")
 fpsTitle.Size = UDim2.new(1, 0, 0, 12); fpsTitle.Position = UDim2.new(0, 0, 0, 4)
 fpsTitle.BackgroundTransparency = 1; fpsTitle.TextColor3 = Color3.fromRGB(60, 200, 120)
-fpsTitle.TextSize = 8; fpsTitle.Font = Enum.Font.GothamBold
+fpsTitle.TextSize = 8; fpsTitle.Font = Enum.Font.SourceSansBold
 fpsTitle.Text = "FPS METER"; fpsTitle.Parent = fpsWidget
 
 local fpsLbl = Instance.new("TextLabel")
 fpsLbl.Size = UDim2.new(1, 0, 0, 18); fpsLbl.Position = UDim2.new(0, 0, 0, 16)
 fpsLbl.BackgroundTransparency = 1; fpsLbl.TextColor3 = Color3.fromRGB(220, 230, 255)
-fpsLbl.TextSize = 16; fpsLbl.Font = Enum.Font.GothamBold
+fpsLbl.TextSize = 16; fpsLbl.Font = Enum.Font.SourceSansBold
 fpsLbl.Text = "-- fps"; fpsLbl.Parent = fpsWidget
 
 -- FPS counter logic
@@ -660,7 +741,7 @@ do
 		local l = Instance.new("TextLabel")
 		l.Size = UDim2.new(0.68, 0, 0, 14); l.Position = UDim2.new(0, 76, 0, y)
 		l.BackgroundTransparency = 1; l.TextColor3 = Color3.fromRGB(140, 145, 172)
-		l.TextSize = 11; l.Font = Enum.Font.Gotham; l.RichText = true
+		l.TextSize = 11; l.Font = Enum.Font.SourceSans; l.RichText = true
 		l.Text = ("<font color='#4078ff'><b>%s</b></font>  %s"):format(label, tostring(val))
 		l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = card
 	end
@@ -691,10 +772,10 @@ do
 		col.Position = UDim2.new(sd.x,0,0,0); col.BackgroundTransparency=1; col.Parent=statsCard
 		local v = Instance.new("TextLabel"); v.Size=UDim2.new(1,0,0,26); v.Position=UDim2.new(0,0,0,10)
 		v.BackgroundTransparency=1; v.TextColor3=Color3.fromRGB(70,140,255); v.TextSize=18
-		v.Font=Enum.Font.GothamBold; v.Text=tostring(sd.get()); v.Parent=col
+		v.Font=Enum.Font.SourceSansBold; v.Text=tostring(sd.get()); v.Parent=col
 		local lb = Instance.new("TextLabel"); lb.Size=UDim2.new(1,0,0,11); lb.Position=UDim2.new(0,0,0,40)
 		lb.BackgroundTransparency=1; lb.TextColor3=Color3.fromRGB(72,76,105); lb.TextSize=9
-		lb.Font=Enum.Font.Gotham; lb.Text=sd.lbl; lb.Parent=col
+		lb.Font=Enum.Font.SourceSans; lb.Text=sd.lbl; lb.Parent=col
 		table.insert(statRefs, {v=v, get=sd.get})
 	end
 	task.spawn(function()
@@ -710,9 +791,107 @@ do
 	Instance.new("UICorner").Parent = aboutCard
 	local al = Instance.new("TextLabel"); al.Size=UDim2.new(1,-16,1,0); al.Position=UDim2.new(0,8,0,0)
 	al.BackgroundTransparency=1; al.TextColor3=Color3.fromRGB(90,95,120); al.TextSize=10
-	al.Font=Enum.Font.Gotham
-	al.Text="Admin Panel v4  |  V — запись   B — воспроизвести\nCapsLock — Авто-прыжок вкл/выкл"
+	al.Font=Enum.Font.SourceSans
+	al.Text="Admin Panel v5  |  V — запись   B — воспроизвести\nCapsLock — Авто-прыжок вкл/выкл"
 	al.TextXAlignment=Enum.TextXAlignment.Left; al.TextWrapped=true; al.Parent=aboutCard
+
+	-- ── ПРЕСЕТЫ ──
+	makeSection(f, "Сохранённые настройки", 7)
+
+	local inputRow = Instance.new("Frame")
+	inputRow.Size = UDim2.new(1, 0, 0, 32); inputRow.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	inputRow.BorderSizePixel = 0; inputRow.LayoutOrder = 8; inputRow.Parent = f
+	Instance.new("UICorner").Parent = inputRow
+
+	local tb = Instance.new("TextBox")
+	tb.Size = UDim2.new(1, -88, 0, 22); tb.Position = UDim2.new(0, 6, 0.5, -11)
+	tb.BackgroundColor3 = Color3.fromRGB(25, 27, 44); tb.TextColor3 = Color3.fromRGB(190, 195, 220)
+	tb.PlaceholderText = "Название пресета..."; tb.PlaceholderColor3 = Color3.fromRGB(65, 68, 95)
+	tb.TextSize = 11; tb.Font = Enum.Font.SourceSansSemibold; tb.BorderSizePixel = 0
+	tb.Text = ""; tb.ZIndex = 2; tb.Parent = inputRow
+	Instance.new("UICorner").Parent = tb
+	local tbPad = Instance.new("UIPadding"); tbPad.PaddingLeft = UDim.new(0, 6); tbPad.Parent = tb
+
+	local saveBtn = Instance.new("TextButton")
+	saveBtn.Size = UDim2.new(0, 72, 0, 22); saveBtn.Position = UDim2.new(1, -78, 0.5, -11)
+	saveBtn.BackgroundColor3 = Color3.fromRGB(48, 106, 255); saveBtn.Text = "Сохранить"
+	saveBtn.TextColor3 = Color3.fromRGB(235, 240, 255); saveBtn.TextSize = 10
+	saveBtn.Font = Enum.Font.SourceSansBold; saveBtn.BorderSizePixel = 0; saveBtn.ZIndex = 2
+	saveBtn.Parent = inputRow; Instance.new("UICorner").Parent = saveBtn
+
+	local presetScroll = Instance.new("ScrollingFrame")
+	presetScroll.Size = UDim2.new(1, 0, 0, 20); presetScroll.BackgroundTransparency = 1
+	presetScroll.BorderSizePixel = 0; presetScroll.ScrollBarThickness = 3
+	presetScroll.ScrollBarImageColor3 = Color3.fromRGB(60, 120, 255)
+	presetScroll.LayoutOrder = 9; presetScroll.Parent = f
+	local pll = Instance.new("UIListLayout"); pll.Padding = UDim.new(0, 4)
+	pll.SortOrder = Enum.SortOrder.LayoutOrder; pll.Parent = presetScroll
+	pll:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		local h = math.min(math.max(pll.AbsoluteContentSize.Y + 4, 20), 130)
+		presetScroll.Size = UDim2.new(1, 0, 0, h)
+		presetScroll.CanvasSize = UDim2.new(0, 0, 0, pll.AbsoluteContentSize.Y + 4)
+	end)
+	PresetListHolder = presetScroll
+
+	local function rebuildPresets()
+		for _, c in ipairs(presetScroll:GetChildren()) do
+			if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+		end
+		if #Presets == 0 then
+			local e = Instance.new("TextLabel"); e.Size = UDim2.new(1, 0, 0, 22)
+			e.BackgroundTransparency = 1; e.TextColor3 = Color3.fromRGB(60, 64, 90)
+			e.TextSize = 10; e.Font = Enum.Font.SourceSans; e.Text = "Нет сохранённых пресетов"
+			e.Parent = presetScroll; return
+		end
+		for i, preset in ipairs(Presets) do
+			local pr = Instance.new("Frame"); pr.Size = UDim2.new(1, 0, 0, 28)
+			pr.BackgroundColor3 = Color3.fromRGB(20, 22, 34); pr.BorderSizePixel = 0
+			pr.LayoutOrder = i; pr.Parent = presetScroll; Instance.new("UICorner").Parent = pr
+			local nLbl = Instance.new("TextLabel"); nLbl.Size = UDim2.new(0.54, 0, 1, 0)
+			nLbl.Position = UDim2.new(0, 8, 0, 0); nLbl.BackgroundTransparency = 1
+			nLbl.TextColor3 = Color3.fromRGB(160, 165, 200); nLbl.TextSize = 11
+			nLbl.Font = Enum.Font.SourceSansSemibold; nLbl.Text = preset.name
+			nLbl.TextXAlignment = Enum.TextXAlignment.Left; nLbl.Parent = pr
+			local lB = Instance.new("TextButton"); lB.Size = UDim2.new(0, 54, 0, 20)
+			lB.Position = UDim2.new(1, -82, 0.5, -10); lB.BackgroundColor3 = Color3.fromRGB(36, 82, 200)
+			lB.Text = "Загрузить"; lB.TextColor3 = Color3.fromRGB(225, 230, 255); lB.TextSize = 9
+			lB.Font = Enum.Font.SourceSansBold; lB.BorderSizePixel = 0; lB.Parent = pr
+			Instance.new("UICorner").Parent = lB
+			local dB = Instance.new("TextButton"); dB.Size = UDim2.new(0, 20, 0, 20)
+			dB.Position = UDim2.new(1, -24, 0.5, -10); dB.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+			dB.Text = "✕"; dB.TextColor3 = Color3.fromRGB(255, 255, 255); dB.TextSize = 10
+			dB.Font = Enum.Font.SourceSansBold; dB.BorderSizePixel = 0; dB.Parent = pr
+			Instance.new("UICorner").Parent = dB
+			lB.MouseButton1Click:Connect(function()
+				for k, v in pairs(preset.config) do CONFIG[k] = v end
+				for k, v in pairs(preset.state) do
+					State[k] = v
+					if ToggleSetters[k] then ToggleSetters[k](v) end
+				end
+				for k, v in pairs(preset.keybinds) do
+					Keybinds[k] = v
+					if BindBtnRefs[k] then BindBtnRefs[k].Text = bindName(v) end
+				end
+				notify("Пресет загружен: " .. preset.name, Color3.fromRGB(45, 200, 100))
+			end)
+			dB.MouseButton1Click:Connect(function()
+				table.remove(Presets, i); rebuildPresets()
+				notify("Пресет удалён", Color3.fromRGB(200, 65, 65))
+			end)
+		end
+	end
+	rebuildPresets()
+
+	saveBtn.MouseButton1Click:Connect(function()
+		local name = tb.Text:match("^%s*(.-)%s*$")
+		if name == "" then notify("Введите название!", Color3.fromRGB(205, 65, 65)); return end
+		local cfg = {} for k, v in pairs(CONFIG) do cfg[k] = v end
+		local st  = {} for k, v in pairs(State)  do st[k]  = v end
+		local kb  = {} for k, v in pairs(Keybinds) do kb[k] = v end
+		table.insert(Presets, {name = name, config = cfg, state = st, keybinds = kb})
+		rebuildPresets(); tb.Text = ""
+		notify("Пресет сохранён: " .. name, Color3.fromRGB(45, 200, 100))
+	end)
 end
 
 -- ══════════════════════════════════════════
@@ -727,77 +906,97 @@ do
 			State.AutoJump = on
 			updateStatusOverlay()
 			notify(on and "Авто-прыжок: ВКЛ" or "Авто-прыжок: ВЫКЛ")
-		end, 2)
+		end, 2, "AutoJump")
+	makeBindRow(f, "Клавиша: авто-прыжок", "AutoJump", 3)
 	makeSlider(f, "Сила авто-прыжка", 5, 200, CONFIG.AutoJumpDefault, "", function(v)
 		CONFIG.AutoJumpHeight = v
-	end, 3)
+	end, 4)
 
-	makeSection(f, "Прыжок", 4)
+	makeSection(f, "Прыжок", 5)
 	makeToggle(f, "Высокий прыжок", "Очень высокий прыжок (JumpPower)",
 		function(on)
 			State.HighJump = on
 			local h = getChar() and getChar():FindFirstChild("Humanoid")
 			if h then h.JumpPower = on and CONFIG.HighJumpPower or 50 end
 			notify(on and "Высокий прыжок: ВКЛ" or "Высокий прыжок: ВЫКЛ")
-		end, 5)
+		end, 6, "HighJump")
 	makeSlider(f, "Сила прыжка", 50, 500, CONFIG.HighJumpDefault, "", function(v)
 		CONFIG.HighJumpPower = v
 		if State.HighJump then
 			local h = getChar() and getChar():FindFirstChild("Humanoid")
 			if h then h.JumpPower = v end
 		end
-	end, 6)
+	end, 7)
 	makeToggle(f, "Infinite Jump", "Прыгать бесконечно в воздухе",
-		function(on) State.InfiniteJump = on; notify(on and "Infinite Jump: ВКЛ" or "ВЫКЛ") end, 7)
+		function(on) State.InfiniteJump = on; notify(on and "Infinite Jump: ВКЛ" or "ВЫКЛ") end, 8, "InfiniteJump")
+	makeBindRow(f, "Клавиша: infinite jump", "InfiniteJump", 9)
 	makeToggle(f, "Bunny Hop", "Авто-прыжок при каждом касании земли",
-		function(on) State.BunnyHop = on; notify(on and "Bunny Hop: ВКЛ" or "ВЫКЛ") end, 8)
+		function(on) State.BunnyHop = on; notify(on and "Bunny Hop: ВКЛ" or "ВЫКЛ") end, 10, "BunnyHop")
+	makeBindRow(f, "Клавиша: bunny hop", "BunnyHop", 11)
 
-	makeSection(f, "Скорость", 9)
+	makeSection(f, "Скорость", 12)
 	makeToggle(f, "Speed Hack", "Изменяет скорость ходьбы (WalkSpeed)",
 		function(on)
 			State.SpeedHack = on
 			local h = getChar() and getChar():FindFirstChild("Humanoid")
 			if h then h.WalkSpeed = on and CONFIG.WalkSpeed or 16 end
 			notify(on and "Speed: " .. CONFIG.WalkSpeed or "Speed Hack: ВЫКЛ")
-		end, 10)
+		end, 13, "SpeedHack")
+	makeBindRow(f, "Клавиша: speed hack", "SpeedHack", 14)
 	makeSlider(f, "WalkSpeed", 4, 200, CONFIG.WalkSpeedDefault, "", function(v)
 		CONFIG.WalkSpeed = v
 		if State.SpeedHack then
 			local h = getChar() and getChar():FindFirstChild("Humanoid")
 			if h then h.WalkSpeed = v end
 		end
-	end, 11)
+	end, 15)
 
-	makeSection(f, "Ghost Replay  [V=запись  B=воспроизвести]", 12)
+	makeSection(f, "Spinbot", 16)
+	makeToggle(f, "Spinbot (в Визуале)", "Управление спинботом — в табе Визуал",
+		function(on)
+			State.Spinbot = on
+			if not on then
+				local root = getChar() and getChar():FindFirstChild("HumanoidRootPart")
+				if root then local b = root:FindFirstChild("_SpinBAV"); if b then b:Destroy() end end
+			end
+			notify(on and "Spinbot: ВКЛ" or "Spinbot: ВЫКЛ")
+		end, 17, "Spinbot")
+	makeSlider(f, "Скорость вращения", -20, 20, CONFIG.SpinSpeed, "", function(v)
+		CONFIG.SpinSpeed = v
+	end, 18)
+
+	makeSection(f, "Ghost Replay  [V = запись   B = воспроизвести]", 19)
 
 	local recCard = Instance.new("Frame")
 	recCard.Size = UDim2.new(1, 0, 0, 44); recCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
-	recCard.BorderSizePixel = 0; recCard.LayoutOrder = 13; recCard.Parent = f
+	recCard.BorderSizePixel = 0; recCard.LayoutOrder = 20; recCard.Parent = f
 	Instance.new("UICorner").Parent = recCard
 
 	local recStatus = Instance.new("TextLabel")
 	recStatus.Size = UDim2.new(1, -14, 0, 16); recStatus.Position = UDim2.new(0, 10, 0, 6)
 	recStatus.BackgroundTransparency = 1; recStatus.TextColor3 = Color3.fromRGB(170, 45, 45)
-	recStatus.TextSize = 11; recStatus.Font = Enum.Font.GothamBold
+	recStatus.TextSize = 11; recStatus.Font = Enum.Font.SourceSansBold
 	recStatus.Text = "● Запись не активна"
 	recStatus.TextXAlignment = Enum.TextXAlignment.Left; recStatus.Parent = recCard
 
 	local recHint = Instance.new("TextLabel")
 	recHint.Size = UDim2.new(1, -14, 0, 14); recHint.Position = UDim2.new(0, 10, 0, 26)
 	recHint.BackgroundTransparency = 1; recHint.TextColor3 = Color3.fromRGB(65, 68, 95)
-	recHint.TextSize = 9; recHint.Font = Enum.Font.Gotham
+	recHint.TextSize = 9; recHint.Font = Enum.Font.SourceSans
 	recHint.Text = "V — начать/стоп   B — воспроизвести"
 	recHint.TextXAlignment = Enum.TextXAlignment.Left; recHint.Parent = recCard
 
 	-- Сохраняем ссылку для InputBegan
 	_G._AP_recStatus = recStatus
 
-	makeSection(f, "Настройки", 14)
+	makeBindRow(f, "Клавиша: стоп реплея", "StopReplay", 21)
+
+	makeSection(f, "Настройки", 22)
 	makeToggle(f, "Показывать статус-оверлей", "Мини-панель с состоянием авто-прыжка (правый верх)",
 		function(on)
 			CONFIG.ShowStatusOverlay = on
 			statusOvF.Visible = on
-		end, 15)
+		end, 23, "ShowOverlay")
 end
 
 -- ══════════════════════════════════════════
@@ -823,13 +1022,13 @@ do
 	local fpsTogLbl = Instance.new("TextLabel")
 	fpsTogLbl.Size = UDim2.new(0.6, 0, 0, 18); fpsTogLbl.Position = UDim2.new(0, 12, 0, 7)
 	fpsTogLbl.BackgroundTransparency = 1; fpsTogLbl.TextColor3 = Color3.fromRGB(185, 190, 215)
-	fpsTogLbl.TextSize = 12; fpsTogLbl.Font = Enum.Font.GothamSemibold; fpsTogLbl.Text = "FPS счётчик"
+	fpsTogLbl.TextSize = 12; fpsTogLbl.Font = Enum.Font.SourceSansSemibold; fpsTogLbl.Text = "FPS счётчик"
 	fpsTogLbl.TextXAlignment = Enum.TextXAlignment.Left; fpsTogLbl.ZIndex = 2; fpsTogLbl.Parent = fpsRow
 
 	local fpsTogDesc = Instance.new("TextLabel")
 	fpsTogDesc.Size = UDim2.new(0.72, 0, 0, 14); fpsTogDesc.Position = UDim2.new(0, 12, 0, 27)
 	fpsTogDesc.BackgroundTransparency = 1; fpsTogDesc.TextColor3 = Color3.fromRGB(80, 85, 108)
-	fpsTogDesc.TextSize = 10; fpsTogDesc.Font = Enum.Font.Gotham
+	fpsTogDesc.TextSize = 10; fpsTogDesc.Font = Enum.Font.SourceSans
 	fpsTogDesc.Text = "Показывает FPS. Виджет можно перетащить мышью"
 	fpsTogDesc.TextXAlignment = Enum.TextXAlignment.Left; fpsTogDesc.TextWrapped = true
 	fpsTogDesc.ZIndex = 2; fpsTogDesc.Parent = fpsRow
@@ -959,6 +1158,118 @@ do
 		end, 14)
 	makeToggle(f, "Fake Lag", "Рывки персонажа (видно другим)",
 		function(on) State.FakeLag = on; notify(on and "Fake Lag: ВКЛ" or "Fake Lag: ВЫКЛ") end, 15)
+
+	makeSection(f, "Косметика (визуальная)", 16)
+	makeToggle(f, "Corblox вместо ног", "Надевает Corblox на ноги (только у тебя визуально)",
+		function(on)
+			State.CorbloxFeet = on
+			local char = getChar(); if not char then return end
+			-- R15 и R6 имена ног
+			local footParts = {
+				"LeftFoot","RightFoot",         -- R15 ступни
+				"LeftLowerLeg","RightLowerLeg", -- R15 нижняя голень
+				"Left Leg","Right Leg",         -- R6
+			}
+			if on then
+				local found = false
+				for _, partName in ipairs(footParts) do
+					local part = char:FindFirstChild(partName)
+					if part and part:IsA("BasePart") then
+						found = true
+						-- чистим старые
+						for _, old in ipairs(char:GetDescendants()) do
+							if old.Name == "_CorbloxDeco" then old:Destroy() end
+						end
+						-- делаем блок на каждую ступню отдельно
+						local function attachBlock(p)
+							local block = Instance.new("Part")
+							block.Name = "_CorbloxDeco"
+							block.Size = Vector3.new(p.Size.X + 0.3, 0.45, p.Size.Z + 0.4)
+							block.BrickColor = BrickColor.new("Bright red")
+							block.Material = Enum.Material.SmoothPlastic
+							block.CanCollide = false
+							block.Parent = char
+							local weld = Instance.new("WeldConstraint")
+							weld.Part0 = p
+							weld.Part1 = block
+							weld.Parent = block
+							block.CFrame = p.CFrame * CFrame.new(0, -(p.Size.Y / 2 + 0.2), 0)
+						end
+						-- находим все ступни
+						for _, fp in ipairs(footParts) do
+							local pp = char:FindFirstChild(fp)
+							if pp and pp:IsA("BasePart") then
+								attachBlock(pp)
+							end
+						end
+						break
+					end
+				end
+				if not found then
+					notify("Не найдены части ног!", Color3.fromRGB(200,80,80))
+				else
+					notify("Corblox ноги: ВКЛ", Color3.fromRGB(255,120,50))
+				end
+			else
+				for _, obj in ipairs(char:GetDescendants()) do
+					if obj.Name == "_CorbloxDeco" then obj:Destroy() end
+				end
+				notify("Corblox ноги: ВЫКЛ")
+			end
+		end, 17, "CorbloxFeet")
+
+	makeToggle(f, "Headlox вместо головы", "Большой блок вместо головы (только у тебя визуально)",
+		function(on)
+			State.HeadloxHead = on
+			local char = getChar(); if not char then return end
+			local head = char:FindFirstChild("Head")
+			if on and head then
+				-- убираем старый
+				local old = char:FindFirstChild("_HeadloxDeco"); if old then old:Destroy() end
+				-- скрываем голову и аксессуары
+				head.Transparency = 1
+				for _, acc in ipairs(char:GetChildren()) do
+					if acc:IsA("Accessory") then
+						local h = acc:FindFirstChild("Handle")
+						if h then h.Transparency = 1 end
+					end
+				end
+				-- создаём Headlox блок
+				local block = Instance.new("Part")
+				block.Name = "_HeadloxDeco"
+				block.Size = Vector3.new(2.0, 1.9, 2.0)
+				block.BrickColor = BrickColor.new("Bright yellow")
+				block.Material = Enum.Material.SmoothPlastic
+				block.CanCollide = false
+				block.Parent = char
+				-- лицо (тёмная полоска для глаз)
+				local face = Instance.new("Part")
+				face.Name = "_HeadloxFace"
+				face.Size = Vector3.new(1.8, 0.55, 0.05)
+				face.BrickColor = BrickColor.new("Really black")
+				face.Material = Enum.Material.SmoothPlastic
+				face.CanCollide = false
+				face.Parent = char
+				local weldMain = Instance.new("WeldConstraint")
+				weldMain.Part0 = head; weldMain.Part1 = block; weldMain.Parent = block
+				block.CFrame = head.CFrame
+				local weldFace = Instance.new("WeldConstraint")
+				weldFace.Part0 = block; weldFace.Part1 = face; weldFace.Parent = face
+				face.CFrame = block.CFrame * CFrame.new(0, 0.1, -1.02)
+				notify("Headlox голова: ВКЛ", Color3.fromRGB(255,220,50))
+			else
+				local old = char:FindFirstChild("_HeadloxDeco"); if old then old:Destroy() end
+				local oldF = char:FindFirstChild("_HeadloxFace"); if oldF then oldF:Destroy() end
+				if head then head.Transparency = 0 end
+				for _, acc in ipairs(char:GetChildren()) do
+					if acc:IsA("Accessory") then
+						local h = acc:FindFirstChild("Handle")
+						if h then h.Transparency = 0 end
+					end
+				end
+				notify("Headlox голова: ВЫКЛ")
+			end
+		end, 18, "HeadloxHead")
 end
 
 -- ══════════════════════════════════════════
@@ -1017,7 +1328,7 @@ local function ensureDistBG(char)
 		bg.AlwaysOnTop = true; bg.Parent = root
 		local lb = Instance.new("TextLabel"); lb.Name = "D"; lb.Size = UDim2.new(1,0,1,0)
 		lb.BackgroundTransparency = 1; lb.TextColor3 = Color3.fromRGB(80, 200, 255)
-		lb.TextSize = 11; lb.Font = Enum.Font.GothamBold; lb.Text = "?m"; lb.Parent = bg
+		lb.TextSize = 11; lb.Font = Enum.Font.SourceSansBold; lb.Text = "?m"; lb.Parent = bg
 	end
 	return bg
 end
@@ -1082,18 +1393,22 @@ RunService.Heartbeat:Connect(function(dt)
 
 	-- Spinbot
 	if State.Spinbot then
-		spinAngle = (spinAngle + 6) % 360
+		spinAngle = (spinAngle + CONFIG.SpinSpeed) % 360
 		root.CFrame = CFrame.new(root.Position) * CFrame.fromEulerAnglesXYZ(0, math.rad(spinAngle), 0)
 	end
 
-	-- Fake Lag
+	-- Fake Lag: двигаем назад по направлению взгляда (видно другим через репликацию)
 	if State.FakeLag then
 		fakeLagTimer = fakeLagTimer + dt
-		if fakeLagTimer >= 0.12 then
-			fakeLagTimer = 0; fakeLagSave = root.CFrame
-			task.delay(0.06, function()
-				local c2 = getChar(); local r2 = c2 and c2:FindFirstChild("HumanoidRootPart")
-				if r2 and State.FakeLag and fakeLagSave then r2.CFrame = fakeLagSave end
+		if fakeLagTimer >= 0.15 then
+			fakeLagTimer = 0
+			local savedCF = root.CFrame
+			local back = savedCF * CFrame.new(0, 0, 4)
+			root.CFrame = back
+			task.delay(0.07, function()
+				local c2 = getChar()
+				local r2 = c2 and c2:FindFirstChild("HumanoidRootPart")
+				if r2 and State.FakeLag then r2.CFrame = savedCF end
 			end)
 		end
 	end
@@ -1147,11 +1462,48 @@ end)
 UserInputService.InputBegan:Connect(function(inp, gpe)
 	if gpe then return end
 
+	-- M → разблокировать/заблокировать курсор
+	if inp.KeyCode == Enum.KeyCode.M then
+		State.CursorUnlock = not State.CursorUnlock
+		if State.CursorUnlock then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			UserInputService.MouseIconEnabled = true
+			notify("Курсор: разблокирован (M — закрыть)", Color3.fromRGB(90, 210, 140))
+		else
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+			UserInputService.MouseIconEnabled = false
+			notify("Курсор: заблокирован", Color3.fromRGB(180, 80, 80))
+		end
+		return
+	end
+
 	-- CapsLock → авто-прыжок
 	if inp.KeyCode == Enum.KeyCode.CapsLock then
-		State.AutoJump = not State.AutoJump
-		updateStatusOverlay()
-		notify(State.AutoJump and "Авто-прыжок: ВКЛ" or "Авто-прыжок: ВЫКЛ")
+		local s = ToggleSetters["AutoJump"]
+		if s then s(not State.AutoJump) end
+		return
+	end
+
+	-- Пользовательские клавиши для функций
+	local function tryToggle(bindKey, stateKey)
+		if bindMatches(Keybinds[bindKey], inp) then
+			local s = ToggleSetters[stateKey]
+			if s then s(not State[stateKey]) end
+			return true
+		end
+		return false
+	end
+	if tryToggle("AutoJump","AutoJump") then return end
+	if tryToggle("SpeedHack","SpeedHack") then return end
+	if tryToggle("InfiniteJump","InfiniteJump") then return end
+	if tryToggle("BunnyHop","BunnyHop") then return end
+
+	-- Стоп реплея
+	if bindMatches(Keybinds["StopReplay"], inp) and ReplayActive then
+		ReplayActive = false
+		local rs = _G._AP_recStatus
+		if rs then rs.TextColor3 = Color3.fromRGB(170, 45, 45); rs.Text = "⏹ Реплей остановлен" end
+		notify("Ghost Replay: остановлен", Color3.fromRGB(200, 65, 65))
 		return
 	end
 
