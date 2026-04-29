@@ -29,6 +29,10 @@ local CONFIG = {
 	FOVDefault        = 70,
 	ShowStatusOverlay = false,
 	SpinSpeed         = 6,
+	SlopeMinAngle       = 30,
+	SlopeMaxAngle       = 70,
+	SlopeBounceForce    = 65,
+	SlopeBounceCheckDist = 5,
 }
 
 -- Keybinds (nil = нет клавиши)
@@ -90,8 +94,7 @@ local State = {
 	FakeLag      = false,
 	Recording    = false,
 	HasRecord    = false,
-	CorbloxFeet  = false,
-	HeadloxHead  = false,
+	SlopeBounce  = false,
 	CursorUnlock = false,
 }
 
@@ -334,8 +337,9 @@ local function switchTab(name)
 	for _, n in ipairs(tabNames) do
 		local on = (n == name)
 		tabFrames[n].Visible = on
-		tabBtns[n].ind.Size     = on and UDim2.new(0.62, 0, 0, 2) or UDim2.new(0, 0, 0, 2)
-		tabBtns[n].ind.Position = on and UDim2.new(0.19, 0, 1, -2) or UDim2.new(0.5, 0, 1, -2)
+		-- индикатор: активный = полная ширина кнопки снизу, неактивный = скрыт
+		tabBtns[n].ind.Size     = on and UDim2.new(1, -8, 0, 2) or UDim2.new(0, 0, 0, 2)
+		tabBtns[n].ind.Position = on and UDim2.new(0, 4, 1, -2) or UDim2.new(0.5, 0, 1, -2)
 		tabBtns[n].btn.TextColor3 = on and Color3.fromRGB(70, 140, 255) or Color3.fromRGB(100, 105, 128)
 		tabBtns[n].btn.Font = on and Enum.Font.SourceSansBold or Enum.Font.SourceSansSemibold
 	end
@@ -991,12 +995,35 @@ do
 
 	makeBindRow(f, "Клавиша: стоп реплея", "StopReplay", 21)
 
-	makeSection(f, "Настройки", 22)
+	makeSection(f, "Slope Bounce", 22)
+	makeToggle(f, "Slope Bounce", "Отскок от наклонных поверхностей (до касания)",
+		function(on)
+			State.SlopeBounce = on
+			notify(on and "Slope Bounce: ВКЛ" or "Slope Bounce: ВЫКЛ", Color3.fromRGB(255, 200, 60))
+		end, 23, "SlopeBounce")
+	makeBindRow(f, "Клавиша: slope bounce", "SlopeBounce", 24)
+	makeSlider(f, "Мин. угол наклона", 5, 89, 30, "°", function(v)
+		CONFIG.SlopeMinAngle = v
+	end, 25)
+	makeSlider(f, "Макс. угол наклона", 5, 89, 70, "°", function(v)
+		CONFIG.SlopeMaxAngle = v
+	end, 26)
+	makeSlider(f, "Сила отскока", 10, 200, 65, "", function(v)
+		CONFIG.SlopeBounceForce = v
+	end, 27)
+	makeSlider(f, "Дист. до пола (slope)", 1, 15, 5, "м", function(v)
+		CONFIG.SlopeBounceCheckDist = v
+	end, 28)
+	makeSlider(f, "Дист. до пола (авто-прыжок)", 1, 15, CONFIG.AutoJumpThreshold, "м", function(v)
+		CONFIG.AutoJumpThreshold = v
+	end, 29)
+
+	makeSection(f, "Настройки", 30)
 	makeToggle(f, "Показывать статус-оверлей", "Мини-панель с состоянием авто-прыжка (правый верх)",
 		function(on)
 			CONFIG.ShowStatusOverlay = on
 			statusOvF.Visible = on
-		end, 23, "ShowOverlay")
+		end, 31, "ShowOverlay")
 end
 
 -- ══════════════════════════════════════════
@@ -1158,118 +1185,6 @@ do
 		end, 14)
 	makeToggle(f, "Fake Lag", "Рывки персонажа (видно другим)",
 		function(on) State.FakeLag = on; notify(on and "Fake Lag: ВКЛ" or "Fake Lag: ВЫКЛ") end, 15)
-
-	makeSection(f, "Косметика (визуальная)", 16)
-	makeToggle(f, "Corblox вместо ног", "Надевает Corblox на ноги (только у тебя визуально)",
-		function(on)
-			State.CorbloxFeet = on
-			local char = getChar(); if not char then return end
-			-- R15 и R6 имена ног
-			local footParts = {
-				"LeftFoot","RightFoot",         -- R15 ступни
-				"LeftLowerLeg","RightLowerLeg", -- R15 нижняя голень
-				"Left Leg","Right Leg",         -- R6
-			}
-			if on then
-				local found = false
-				for _, partName in ipairs(footParts) do
-					local part = char:FindFirstChild(partName)
-					if part and part:IsA("BasePart") then
-						found = true
-						-- чистим старые
-						for _, old in ipairs(char:GetDescendants()) do
-							if old.Name == "_CorbloxDeco" then old:Destroy() end
-						end
-						-- делаем блок на каждую ступню отдельно
-						local function attachBlock(p)
-							local block = Instance.new("Part")
-							block.Name = "_CorbloxDeco"
-							block.Size = Vector3.new(p.Size.X + 0.3, 0.45, p.Size.Z + 0.4)
-							block.BrickColor = BrickColor.new("Bright red")
-							block.Material = Enum.Material.SmoothPlastic
-							block.CanCollide = false
-							block.Parent = char
-							local weld = Instance.new("WeldConstraint")
-							weld.Part0 = p
-							weld.Part1 = block
-							weld.Parent = block
-							block.CFrame = p.CFrame * CFrame.new(0, -(p.Size.Y / 2 + 0.2), 0)
-						end
-						-- находим все ступни
-						for _, fp in ipairs(footParts) do
-							local pp = char:FindFirstChild(fp)
-							if pp and pp:IsA("BasePart") then
-								attachBlock(pp)
-							end
-						end
-						break
-					end
-				end
-				if not found then
-					notify("Не найдены части ног!", Color3.fromRGB(200,80,80))
-				else
-					notify("Corblox ноги: ВКЛ", Color3.fromRGB(255,120,50))
-				end
-			else
-				for _, obj in ipairs(char:GetDescendants()) do
-					if obj.Name == "_CorbloxDeco" then obj:Destroy() end
-				end
-				notify("Corblox ноги: ВЫКЛ")
-			end
-		end, 17, "CorbloxFeet")
-
-	makeToggle(f, "Headlox вместо головы", "Большой блок вместо головы (только у тебя визуально)",
-		function(on)
-			State.HeadloxHead = on
-			local char = getChar(); if not char then return end
-			local head = char:FindFirstChild("Head")
-			if on and head then
-				-- убираем старый
-				local old = char:FindFirstChild("_HeadloxDeco"); if old then old:Destroy() end
-				-- скрываем голову и аксессуары
-				head.Transparency = 1
-				for _, acc in ipairs(char:GetChildren()) do
-					if acc:IsA("Accessory") then
-						local h = acc:FindFirstChild("Handle")
-						if h then h.Transparency = 1 end
-					end
-				end
-				-- создаём Headlox блок
-				local block = Instance.new("Part")
-				block.Name = "_HeadloxDeco"
-				block.Size = Vector3.new(2.0, 1.9, 2.0)
-				block.BrickColor = BrickColor.new("Bright yellow")
-				block.Material = Enum.Material.SmoothPlastic
-				block.CanCollide = false
-				block.Parent = char
-				-- лицо (тёмная полоска для глаз)
-				local face = Instance.new("Part")
-				face.Name = "_HeadloxFace"
-				face.Size = Vector3.new(1.8, 0.55, 0.05)
-				face.BrickColor = BrickColor.new("Really black")
-				face.Material = Enum.Material.SmoothPlastic
-				face.CanCollide = false
-				face.Parent = char
-				local weldMain = Instance.new("WeldConstraint")
-				weldMain.Part0 = head; weldMain.Part1 = block; weldMain.Parent = block
-				block.CFrame = head.CFrame
-				local weldFace = Instance.new("WeldConstraint")
-				weldFace.Part0 = block; weldFace.Part1 = face; weldFace.Parent = face
-				face.CFrame = block.CFrame * CFrame.new(0, 0.1, -1.02)
-				notify("Headlox голова: ВКЛ", Color3.fromRGB(255,220,50))
-			else
-				local old = char:FindFirstChild("_HeadloxDeco"); if old then old:Destroy() end
-				local oldF = char:FindFirstChild("_HeadloxFace"); if oldF then oldF:Destroy() end
-				if head then head.Transparency = 0 end
-				for _, acc in ipairs(char:GetChildren()) do
-					if acc:IsA("Accessory") then
-						local h = acc:FindFirstChild("Handle")
-						if h then h.Transparency = 0 end
-					end
-				end
-				notify("Headlox голова: ВЫКЛ")
-			end
-		end, 18, "HeadloxHead")
 end
 
 -- ══════════════════════════════════════════
@@ -1303,6 +1218,32 @@ local trail       = nil
 local fakeLagTimer= 0
 local fakeLagSave = nil
 local spinAngle   = 0
+
+-- Постоянно применяем FOV и скорость/прыжок каждые 0.1с
+-- (некоторые игры сбрасывают их через свои скрипты)
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		-- FOV
+		if State.FOVChanged then
+			local cam = workspace.CurrentCamera
+			if cam and cam.FieldOfView ~= CONFIG.FOV then
+				cam.FieldOfView = CONFIG.FOV
+			end
+		end
+		-- Speed & Jump — ищем Humanoid в текущем персонаже
+		local char = getChar()
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			if State.SpeedHack and hum.WalkSpeed ~= CONFIG.WalkSpeed then
+				hum.WalkSpeed = CONFIG.WalkSpeed
+			end
+			if State.HighJump and hum.JumpPower ~= CONFIG.HighJumpPower then
+				hum.JumpPower = CONFIG.HighJumpPower
+			end
+		end
+	end
+end)
 
 local function ensureHL(char, name, fill, outline)
 	if not char or not char.Parent then return end
@@ -1383,6 +1324,39 @@ RunService.Heartbeat:Connect(function(dt)
 			hum:ChangeState(Enum.HumanoidStateType.Jumping)
 			root.AssemblyLinearVelocity = Vector3.new(
 				root.AssemblyLinearVelocity.X, CONFIG.AutoJumpHeight, root.AssemblyLinearVelocity.Z)
+		end
+	end
+
+	-- Slope Bounce
+	if State.SlopeBounce then
+		local rayParams = RaycastParams.new()
+		rayParams.FilterDescendantsInstances = {char}
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+		local vel = root.AssemblyLinearVelocity
+		local checkDist = CONFIG.SlopeBounceCheckDist
+		local dirs = {
+			Vector3.new(0, -checkDist, 0),
+			Vector3.new(vel.X * 0.1, -checkDist, vel.Z * 0.1),
+		}
+		for _, dir in ipairs(dirs) do
+			local hit = workspace:Raycast(root.Position, dir, rayParams)
+			if hit then
+				local normal = hit.Normal
+				local angle = math.deg(math.acos(math.clamp(normal:Dot(Vector3.new(0,1,0)), -1, 1)))
+				if angle >= CONFIG.SlopeMinAngle and angle <= CONFIG.SlopeMaxAngle then
+					local dist = (root.Position - hit.Position).Magnitude
+					if dist <= checkDist * 0.65 then
+						local bounceDir = (normal + Vector3.new(0,1,0)).Unit
+						root.AssemblyLinearVelocity = Vector3.new(
+							bounceDir.X * CONFIG.SlopeBounceForce * 0.4,
+							CONFIG.SlopeBounceForce,
+							bounceDir.Z * CONFIG.SlopeBounceForce * 0.4
+						)
+						hum:ChangeState(Enum.HumanoidStateType.Jumping)
+						break
+					end
+				end
+			end
 		end
 	end
 
@@ -1497,6 +1471,7 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
 	if tryToggle("SpeedHack","SpeedHack") then return end
 	if tryToggle("InfiniteJump","InfiniteJump") then return end
 	if tryToggle("BunnyHop","BunnyHop") then return end
+	if tryToggle("SlopeBounce","SlopeBounce") then return end
 
 	-- Стоп реплея
 	if bindMatches(Keybinds["StopReplay"], inp) and ReplayActive then
