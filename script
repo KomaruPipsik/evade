@@ -969,11 +969,191 @@ do
 		CONFIG.SpinSpeed = v
 	end, 18)
 
-	makeSection(f, "Ghost Replay  [V = запись   B = воспроизвести]", 19)
+	makeSection(f, "Авто Дэш", 19)
+
+	-- Авто Дэш — разворачиваемая карточка
+	local dashCard = Instance.new("Frame")
+	dashCard.Size = UDim2.new(1, 0, 0, 50); dashCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	dashCard.BorderSizePixel = 0; dashCard.LayoutOrder = 20; dashCard.ClipsDescendants = true
+	dashCard.Parent = f; Instance.new("UICorner").Parent = dashCard
+
+	local dashStripe = Instance.new("Frame")
+	dashStripe.Size = UDim2.new(0, 3, 0.7, 0); dashStripe.Position = UDim2.new(0, 0, 0.15, 0)
+	dashStripe.BackgroundColor3 = Color3.fromRGB(255, 160, 40)
+	dashStripe.BackgroundTransparency = 1; dashStripe.BorderSizePixel = 0; dashStripe.ZIndex = 2
+	dashStripe.Parent = dashCard; Instance.new("UICorner").Parent = dashStripe
+
+	local dashTitle = Instance.new("TextLabel")
+	dashTitle.Size = UDim2.new(0.6, 0, 0, 18); dashTitle.Position = UDim2.new(0, 12, 0, 7)
+	dashTitle.BackgroundTransparency = 1; dashTitle.TextColor3 = Color3.fromRGB(185, 190, 215)
+	dashTitle.TextSize = 12; dashTitle.Font = Enum.Font.SourceSansBold; dashTitle.Text = "Авто Дэш"
+	dashTitle.TextXAlignment = Enum.TextXAlignment.Left; dashTitle.ZIndex = 2; dashTitle.Parent = dashCard
+
+	local dashDesc = Instance.new("TextLabel")
+	dashDesc.Size = UDim2.new(0.72, 0, 0, 14); dashDesc.Position = UDim2.new(0, 12, 0, 27)
+	dashDesc.BackgroundTransparency = 1; dashDesc.TextColor3 = Color3.fromRGB(80, 85, 108)
+	dashDesc.TextSize = 10; dashDesc.Font = Enum.Font.SourceSans
+	dashDesc.Text = "Зажимает Ctrl, прыгает, нажимает G + цифру"
+	dashDesc.TextXAlignment = Enum.TextXAlignment.Left; dashDesc.ZIndex = 2; dashDesc.Parent = dashCard
+
+	-- Свитч
+	local dswBg = Instance.new("Frame")
+	dswBg.Size = UDim2.new(0, 38, 0, 20); dswBg.Position = UDim2.new(1, -48, 0, 15)
+	dswBg.BackgroundColor3 = Color3.fromRGB(34, 34, 46); dswBg.BorderSizePixel = 0
+	dswBg.ZIndex = 3; dswBg.Parent = dashCard; Instance.new("UICorner").Parent = dswBg
+	local dknob = Instance.new("Frame")
+	dknob.Size = UDim2.new(0, 14, 0, 14); dknob.Position = UDim2.new(0, 3, 0.5, -7)
+	dknob.BackgroundColor3 = Color3.fromRGB(115, 120, 148); dknob.BorderSizePixel = 0
+	dknob.ZIndex = 4; dknob.Parent = dswBg; Instance.new("UICorner").Parent = dknob
+
+	-- Разворачиваемые опции
+	local dashOptions = Instance.new("Frame")
+	dashOptions.Size = UDim2.new(1, 0, 0, 170); dashOptions.Position = UDim2.new(0, 0, 0, 50)
+	dashOptions.BackgroundTransparency = 1; dashOptions.ZIndex = 2; dashOptions.Parent = dashCard
+	local dol = Instance.new("UIListLayout"); dol.Padding = UDim.new(0, 4)
+	dol.SortOrder = Enum.SortOrder.LayoutOrder; dol.Parent = dashOptions
+	local dop = Instance.new("UIPadding"); dop.PaddingLeft = UDim.new(0, 10); dop.PaddingRight = UDim.new(0, 10); dop.Parent = dashOptions
+
+	-- Клавиша активации дэша
+	local function makeDashRow(parent, label, order)
+		local r = Instance.new("Frame"); r.Size = UDim2.new(1, 0, 0, 30)
+		r.BackgroundColor3 = Color3.fromRGB(24, 24, 32); r.BorderSizePixel = 0; r.LayoutOrder = order; r.Parent = parent
+		Instance.new("UICorner").Parent = r
+		local lb = Instance.new("TextLabel"); lb.Size = UDim2.new(0.6, 0, 1, 0); lb.Position = UDim2.new(0, 8, 0, 0)
+		lb.BackgroundTransparency = 1; lb.TextColor3 = Color3.fromRGB(140, 145, 170); lb.TextSize = 11
+		lb.Font = Enum.Font.SourceSans; lb.Text = label; lb.TextXAlignment = Enum.TextXAlignment.Left; lb.Parent = r
+		return r, lb
+	end
+
+	-- Ряд с клавишей дэша
+	local dashBindRow, _ = makeDashRow(dashOptions, "Клавиша дэша", 1)
+	local dashBindBtn = Instance.new("TextButton")
+	dashBindBtn.Size = UDim2.new(0, 70, 0, 20); dashBindBtn.Position = UDim2.new(1, -76, 0.5, -10)
+	dashBindBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 52); dashBindBtn.Text = "—"
+	dashBindBtn.TextColor3 = Color3.fromRGB(255, 160, 40); dashBindBtn.TextSize = 11
+	dashBindBtn.Font = Enum.Font.SourceSansBold; dashBindBtn.BorderSizePixel = 0; dashBindBtn.ZIndex = 3; dashBindBtn.Parent = dashBindRow
+	Instance.new("UICorner").Parent = dashBindBtn
+
+	-- Выбор цифры 1–6
+	local digitRow, _ = makeDashRow(dashOptions, "Цифра слота (1–6)", 2)
+	local digitLabel = Instance.new("TextLabel")
+	digitLabel.Size = UDim2.new(0, 24, 0, 22); digitLabel.Position = UDim2.new(1, -76, 0.5, -11)
+	digitLabel.BackgroundColor3 = Color3.fromRGB(28, 32, 52); digitLabel.TextColor3 = Color3.fromRGB(255, 160, 40)
+	digitLabel.TextSize = 12; digitLabel.Font = Enum.Font.SourceSansBold; digitLabel.Text = "1"
+	digitLabel.BackgroundTransparency = 0; digitLabel.BorderSizePixel = 0; digitLabel.ZIndex = 3; digitLabel.Parent = digitRow
+	Instance.new("UICorner").Parent = digitLabel
+	local arrowL = Instance.new("TextButton"); arrowL.Size = UDim2.new(0, 22, 0, 22)
+	arrowL.Position = UDim2.new(1, -100, 0.5, -11); arrowL.BackgroundColor3 = Color3.fromRGB(32, 36, 56)
+	arrowL.Text = "◀"; arrowL.TextColor3 = Color3.fromRGB(180, 185, 210); arrowL.TextSize = 10
+	arrowL.Font = Enum.Font.SourceSansBold; arrowL.BorderSizePixel = 0; arrowL.ZIndex = 3; arrowL.Parent = digitRow
+	Instance.new("UICorner").Parent = arrowL
+	local arrowR = Instance.new("TextButton"); arrowR.Size = UDim2.new(0, 22, 0, 22)
+	arrowR.Position = UDim2.new(1, -50, 0.5, -11); arrowR.BackgroundColor3 = Color3.fromRGB(32, 36, 56)
+	arrowR.Text = "▶"; arrowR.TextColor3 = Color3.fromRGB(180, 185, 210); arrowR.TextSize = 10
+	arrowR.Font = Enum.Font.SourceSansBold; arrowR.BorderSizePixel = 0; arrowR.ZIndex = 3; arrowR.Parent = digitRow
+	Instance.new("UICorner").Parent = arrowR
+
+	-- Авто-прыжок у пола в дэше
+	local jumpRow = Instance.new("Frame"); jumpRow.Size = UDim2.new(1, 0, 0, 30)
+	jumpRow.BackgroundColor3 = Color3.fromRGB(24, 24, 32); jumpRow.BorderSizePixel = 0
+	jumpRow.LayoutOrder = 3; jumpRow.Parent = dashOptions; Instance.new("UICorner").Parent = jumpRow
+	local jumpLbl = Instance.new("TextLabel"); jumpLbl.Size = UDim2.new(0.62, 0, 1, 0); jumpLbl.Position = UDim2.new(0, 8, 0, 0)
+	jumpLbl.BackgroundTransparency = 1; jumpLbl.TextColor3 = Color3.fromRGB(140, 145, 170); jumpLbl.TextSize = 11
+	jumpLbl.Font = Enum.Font.SourceSans; jumpLbl.Text = "Не касаться пола (авто-прыжок)"; jumpLbl.TextXAlignment = Enum.TextXAlignment.Left; jumpLbl.Parent = jumpRow
+	local jswBg = Instance.new("Frame"); jswBg.Size = UDim2.new(0, 34, 0, 18)
+	jswBg.Position = UDim2.new(1, -40, 0.5, -9); jswBg.BackgroundColor3 = Color3.fromRGB(34, 34, 46)
+	jswBg.BorderSizePixel = 0; jswBg.ZIndex = 3; jswBg.Parent = jumpRow; Instance.new("UICorner").Parent = jswBg
+	local jknob = Instance.new("Frame"); jknob.Size = UDim2.new(0, 12, 0, 12)
+	jknob.Position = UDim2.new(0, 3, 0.5, -6); jknob.BackgroundColor3 = Color3.fromRGB(115, 120, 148)
+	jknob.BorderSizePixel = 0; jknob.ZIndex = 4; jknob.Parent = jswBg; Instance.new("UICorner").Parent = jknob
+	local jswBtn = Instance.new("TextButton"); jswBtn.Size = UDim2.new(1, 0, 1, 0)
+	jswBtn.BackgroundTransparency = 1; jswBtn.Text = ""; jswBtn.AutoButtonColor = false; jswBtn.ZIndex = 5; jswBtn.Parent = jswBg
+
+	-- Состояние дэша
+	local DASH = {
+		enabled    = false,
+		bind       = nil,
+		digit      = 1,
+		noFloor    = false,
+		listening  = false,
+	}
+
+	-- Digit arrows
+	arrowL.MouseButton1Click:Connect(function()
+		DASH.digit = math.max(1, DASH.digit - 1); digitLabel.Text = tostring(DASH.digit)
+	end)
+	arrowR.MouseButton1Click:Connect(function()
+		DASH.digit = math.min(6, DASH.digit + 1); digitLabel.Text = tostring(DASH.digit)
+	end)
+
+	-- No-floor toggle
+	local jEnabled = false
+	jswBtn.MouseButton1Click:Connect(function()
+		jEnabled = not jEnabled; DASH.noFloor = jEnabled
+		if jEnabled then
+			tw(jswBg, {BackgroundColor3 = Color3.fromRGB(255, 155, 35)}, 0.18)
+			tw(jknob, {Position = UDim2.new(1, -15, 0.5, -6), BackgroundColor3 = Color3.fromRGB(255,255,255)}, 0.18)
+		else
+			tw(jswBg, {BackgroundColor3 = Color3.fromRGB(34, 34, 46)}, 0.18)
+			tw(jknob, {Position = UDim2.new(0, 3, 0.5, -6), BackgroundColor3 = Color3.fromRGB(115, 120, 148)}, 0.18)
+		end
+	end)
+
+	-- Bind button
+	dashBindBtn.MouseButton1Click:Connect(function()
+		if DASH.listening then return end
+		DASH.listening = true; dashBindBtn.Text = "..."
+		local conn
+		conn = UserInputService.InputBegan:Connect(function(inp, gpe)
+			if gpe then return end
+			if inp.UserInputType == Enum.UserInputType.Keyboard then
+				conn:Disconnect(); DASH.listening = false
+				DASH.bind = inp.KeyCode; dashBindBtn.Text = inp.KeyCode.Name
+				notify("Дэш-клавиша: " .. inp.KeyCode.Name, Color3.fromRGB(255,160,40))
+			end
+		end)
+	end)
+
+	-- Главный свитч дэша
+	local dEnabled = false
+	local function toggleDash()
+		dEnabled = not dEnabled; DASH.enabled = dEnabled
+		if dEnabled then
+			tw(dswBg, {BackgroundColor3 = Color3.fromRGB(220, 140, 30)}, 0.2)
+			tw(dknob, {Position = UDim2.new(1, -17, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255,255,255)}, 0.2)
+			tw(dashStripe, {BackgroundTransparency = 0}, 0.18)
+			tw(dashTitle, {TextColor3 = Color3.fromRGB(255, 200, 100)}, 0.18)
+			tw(dashCard, {Size = UDim2.new(1, 0, 0, 230), BackgroundColor3 = Color3.fromRGB(22, 20, 14)}, 0.22)
+			notify("Авто Дэш: ВКЛ", Color3.fromRGB(255,160,40))
+		else
+			tw(dswBg, {BackgroundColor3 = Color3.fromRGB(34, 34, 46)}, 0.2)
+			tw(dknob, {Position = UDim2.new(0, 3, 0.5, -7), BackgroundColor3 = Color3.fromRGB(115, 120, 148)}, 0.2)
+			tw(dashStripe, {BackgroundTransparency = 1}, 0.18)
+			tw(dashTitle, {TextColor3 = Color3.fromRGB(185, 190, 215)}, 0.18)
+			tw(dashCard, {Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = Color3.fromRGB(19, 19, 26)}, 0.22)
+			notify("Авто Дэш: ВЫКЛ")
+		end
+	end
+
+	local dswBtn = Instance.new("TextButton"); dswBtn.Size = UDim2.new(1, 0, 1, 0)
+	dswBtn.BackgroundTransparency = 1; dswBtn.Text = ""; dswBtn.AutoButtonColor = false
+	dswBtn.ZIndex = 5; dswBtn.Parent = dswBg
+	dswBtn.MouseButton1Click:Connect(toggleDash)
+
+	-- Hover на левой части
+	local dRowBtn = Instance.new("TextButton"); dRowBtn.Size = UDim2.new(1, -56, 0, 50)
+	dRowBtn.Position = UDim2.new(0, 0, 0, 0); dRowBtn.BackgroundTransparency = 1
+	dRowBtn.Text = ""; dRowBtn.AutoButtonColor = false; dRowBtn.ZIndex = 2; dRowBtn.Parent = dashCard
+	dRowBtn.MouseButton1Click:Connect(toggleDash)
+
+	-- DASH logic → в _G для InputBegan
+	_G._AP_DASH = DASH
+
+	makeSection(f, "Ghost Replay  [V = запись   B = воспроизвести]", 40)
 
 	local recCard = Instance.new("Frame")
 	recCard.Size = UDim2.new(1, 0, 0, 44); recCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
-	recCard.BorderSizePixel = 0; recCard.LayoutOrder = 20; recCard.Parent = f
+	recCard.BorderSizePixel = 0; recCard.LayoutOrder = 41; recCard.Parent = f
 	Instance.new("UICorner").Parent = recCard
 
 	local recStatus = Instance.new("TextLabel")
@@ -993,9 +1173,9 @@ do
 	-- Сохраняем ссылку для InputBegan
 	_G._AP_recStatus = recStatus
 
-	makeBindRow(f, "Клавиша: стоп реплея", "StopReplay", 21)
+	makeBindRow(f, "Клавиша: стоп реплея", "StopReplay", 42)
 
-	makeSection(f, "Slope Bounce", 22)
+	makeSection(f, "Slope Bounce", 43)
 	makeToggle(f, "Slope Bounce", "Отскок от наклонных поверхностей (до касания)",
 		function(on)
 			State.SlopeBounce = on
@@ -1104,17 +1284,38 @@ do
 	fpsRowBtn.MouseLeave:Connect(function() tw(fpsRow,{BackgroundColor3=Color3.fromRGB(19,19,26)},0.12) end)
 
 	makeSection(f, "Освещение", 3)
-	makeToggle(f, "Fullbright", "Убирает темноту, максимальная яркость",
+	makeToggle(f, "Fullbright / Ночное зрение", "Светлое небо, убирает туман и атмосферу",
 		function(on)
 			State.Fullbright = on
 			if on then
 				Lighting.Brightness = 10; Lighting.ClockTime = 14; Lighting.FogEnd = 100000
 				Lighting.GlobalShadows = false
-				Lighting.Ambient = Color3.fromRGB(255,255,255); Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+				Lighting.Ambient = Color3.fromRGB(255,255,255)
+				Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+				-- Убираем атмосферу
+				local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+				if atm then atm.Density = 0; atm.Offset = 0; atm.Haze = 0; atm.Glare = 0 end
+				-- Меняем небо на светлое
+				local sky = Lighting:FindFirstChildOfClass("Sky")
+				if not sky then
+					sky = Instance.new("Sky"); sky.Name = "_APSky"; sky.Parent = Lighting
+				end
+				sky.SkyboxBk = "rbxassetid://159454286"
+				sky.SkyboxDn = "rbxassetid://159454286"
+				sky.SkyboxFt = "rbxassetid://159454286"
+				sky.SkyboxLf = "rbxassetid://159454286"
+				sky.SkyboxRt = "rbxassetid://159454286"
+				sky.SkyboxUp = "rbxassetid://159454286"
+				sky.StarCount = 0
 			else
 				Lighting.Brightness = 1; Lighting.ClockTime = 14; Lighting.FogEnd = 10000
 				Lighting.GlobalShadows = true
-				Lighting.Ambient = Color3.fromRGB(127,127,127); Lighting.OutdoorAmbient = Color3.fromRGB(127,127,127)
+				Lighting.Ambient = Color3.fromRGB(127,127,127)
+				Lighting.OutdoorAmbient = Color3.fromRGB(127,127,127)
+				local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+				if atm then atm.Density = 0.395; atm.Offset = 0; atm.Haze = 0; atm.Glare = 0 end
+				local sky = Lighting:FindFirstChild("_APSky")
+				if sky then sky:Destroy() end
 			end
 			notify(on and "Fullbright: ВКЛ" or "Fullbright: ВЫКЛ")
 		end, 4)
@@ -1365,24 +1566,37 @@ RunService.Heartbeat:Connect(function(dt)
 		hum:ChangeState(Enum.HumanoidStateType.Jumping)
 	end
 
-	-- Spinbot
+	-- Spinbot (BodyAngularVelocity — плавное вращение без дёрганья)
 	if State.Spinbot then
-		spinAngle = (spinAngle + CONFIG.SpinSpeed) % 360
-		root.CFrame = CFrame.new(root.Position) * CFrame.fromEulerAnglesXYZ(0, math.rad(spinAngle), 0)
+		local bav = root:FindFirstChild("_SpinBAV")
+		if not bav then
+			bav = Instance.new("BodyAngularVelocity")
+			bav.Name = "_SpinBAV"
+			bav.MaxTorque = Vector3.new(0, math.huge, 0)
+			bav.Parent = root
+		end
+		bav.AngularVelocity = Vector3.new(0, CONFIG.SpinSpeed, 0)
+	else
+		local bav = root:FindFirstChild("_SpinBAV")
+		if bav then bav:Destroy() end
 	end
 
-	-- Fake Lag: двигаем назад по направлению взгляда (видно другим через репликацию)
+	-- Fake Lag: визуальный рывок (task.defer - почти без задержки, не блокирует движение)
 	if State.FakeLag then
 		fakeLagTimer = fakeLagTimer + dt
-		if fakeLagTimer >= 0.15 then
+		if fakeLagTimer >= 0.18 then
 			fakeLagTimer = 0
-			local savedCF = root.CFrame
-			local back = savedCF * CFrame.new(0, 0, 4)
-			root.CFrame = back
-			task.delay(0.07, function()
+			local savedVel = root.AssemblyLinearVelocity
+			local savedCF  = root.CFrame
+			root.CFrame = savedCF * CFrame.new(0, 0, 5)
+			root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+			task.defer(function()
 				local c2 = getChar()
 				local r2 = c2 and c2:FindFirstChild("HumanoidRootPart")
-				if r2 and State.FakeLag then r2.CFrame = savedCF end
+				if r2 and State.FakeLag then
+					r2.CFrame = savedCF
+					r2.AssemblyLinearVelocity = savedVel
+				end
 			end)
 		end
 	end
@@ -1473,6 +1687,64 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
 	if tryToggle("BunnyHop","BunnyHop") then return end
 	if tryToggle("SlopeBounce","SlopeBounce") then return end
 
+	-- Авто Дэш
+	local DASH = _G._AP_DASH
+	if DASH and DASH.enabled and DASH.bind and inp.KeyCode == DASH.bind then
+		task.spawn(function()
+			-- 1. Зажать Ctrl
+			local vs = game:GetService("VirtualInputManager") or nil
+			-- Используем keydown через UserInputService simulation
+			-- Ctrl
+			local function pressKey(kc)
+				local ui = UserInputService
+				-- Симулируем через InputObject (работает в Studio)
+				local fakeInp = {KeyCode = kc, UserInputType = Enum.UserInputType.Keyboard}
+				-- Нет прямого способа симулировать — используем Humanoid для прыжка
+				-- и VirtualInputManager для Ctrl/G/digit если доступен
+			end
+
+			local char2 = getChar()
+			local hum2 = char2 and char2:FindFirstChild("Humanoid")
+			local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
+			if not hum2 or not root2 then return end
+
+			-- Авто-прыжок если включён "не касаться пола"
+			if DASH.noFloor then
+				hum2:ChangeState(Enum.HumanoidStateType.Jumping)
+				if root2 then
+					root2.AssemblyLinearVelocity = Vector3.new(
+						root2.AssemblyLinearVelocity.X, CONFIG.AutoJumpHeight, root2.AssemblyLinearVelocity.Z)
+				end
+			end
+
+			task.wait(0.05)
+
+			-- Нажать G (дэш в Evade)
+			-- VirtualInputManager доступен только в Studio, пробуем
+			local vim = game:GetService("VirtualInputManager")
+			if vim then
+				vim:SendKeyEvent(true,  Enum.KeyCode.LeftControl, false, game)
+				task.wait(0.04)
+				vim:SendKeyEvent(true,  Enum.KeyCode.G,           false, game)
+				task.wait(0.06)
+				vim:SendKeyEvent(false, Enum.KeyCode.G,           false, game)
+				task.wait(0.05)
+				-- Нажать цифру слота
+				local digitKey = ({"One","Two","Three","Four","Five","Six"})[DASH.digit]
+				if digitKey then
+					vim:SendKeyEvent(true,  Enum.KeyCode[digitKey], false, game)
+					task.wait(0.05)
+					vim:SendKeyEvent(false, Enum.KeyCode[digitKey], false, game)
+				end
+				task.wait(0.05)
+				vim:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+			end
+
+			notify("Дэш активирован! Слот " .. DASH.digit, Color3.fromRGB(255,160,40))
+		end)
+		return
+	end
+
 	-- Стоп реплея
 	if bindMatches(Keybinds["StopReplay"], inp) and ReplayActive then
 		ReplayActive = false
@@ -1511,16 +1783,28 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
 			local savedWS = hum2 and hum2.WalkSpeed or 16
 			local savedJP = hum2 and hum2.JumpPower  or 50
 			if hum2 then hum2.WalkSpeed = 0; hum2.JumpPower = 0 end
-			for _, frame in ipairs(RecordedFrames) do
-				if not ReplayActive then break end
-				local root2 = getChar() and getChar():FindFirstChild("HumanoidRootPart")
-				if root2 then root2.CFrame = frame.CFrame end
-				task.wait(frame.dt)
-			end
-			ReplayActive = false
-			if hum2 then hum2.WalkSpeed = savedWS; hum2.JumpPower = savedJP end
-			if rs then rs.TextColor3 = Color3.fromRGB(55,200,100); rs.Text = "✔ Завершено   B — повторить" end
-			notify("Ghost Replay: завершён", Color3.fromRGB(55,200,100))
+			-- Используем Heartbeat для точного воспроизведения (без lag от task.wait)
+			local frameIdx = 1
+			local elapsed = 0
+			local conn
+			conn = RunService.Heartbeat:Connect(function(dt)
+				if not ReplayActive or frameIdx > #RecordedFrames then
+					conn:Disconnect()
+					ReplayActive = false
+					if hum2 then hum2.WalkSpeed = savedWS; hum2.JumpPower = savedJP end
+					if rs then rs.TextColor3 = Color3.fromRGB(55,200,100); rs.Text = "✔ Завершено   B — повторить" end
+					notify("Ghost Replay: завершён", Color3.fromRGB(55,200,100))
+					return
+				end
+				elapsed = elapsed + dt
+				while frameIdx <= #RecordedFrames and elapsed >= 0 do
+					local frame = RecordedFrames[frameIdx]
+					local root2 = getChar() and getChar():FindFirstChild("HumanoidRootPart")
+					if root2 then root2.CFrame = frame.CFrame end
+					elapsed = elapsed - frame.dt
+					frameIdx = frameIdx + 1
+				end
+			end)
 		end)
 	end
 end)
