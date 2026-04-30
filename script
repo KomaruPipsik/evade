@@ -33,6 +33,9 @@ local CONFIG = {
 	SlopeMaxAngle       = 70,
 	SlopeBounceForce    = 65,
 	SlopeBounceCheckDist = 5,
+	SlopeRandEnabled    = false,
+	SlopeRandMin        = 50,
+	SlopeRandMax        = 100,
 }
 
 -- Keybinds (nil = нет клавиши)
@@ -319,8 +322,10 @@ for i, name in ipairs(tabNames) do
 	btn.TextSize = 12; btn.Font = Enum.Font.SourceSansSemibold
 	btn.ZIndex = 6; btn.AutoButtonColor = false; btn.Parent = navBar
 	local ind = Instance.new("Frame")
-	ind.Size = UDim2.new(0, 0, 0, 2); ind.Position = UDim2.new(0.5, 0, 1, -2)
-	ind.AnchorPoint = Vector2.new(0.5, 0); ind.BackgroundColor3 = Color3.fromRGB(70, 140, 255)
+	ind.Size = UDim2.new(0, 0, 0, 2)
+	ind.Position = UDim2.new(0.5, 0, 1, -2)
+	ind.AnchorPoint = Vector2.new(0.5, 0)
+	ind.BackgroundColor3 = Color3.fromRGB(70, 140, 255)
 	ind.BorderSizePixel = 0; ind.ZIndex = 7; ind.Parent = btn
 	tabBtns[name] = {btn = btn, ind = ind}
 	btn.MouseEnter:Connect(function()
@@ -337,9 +342,9 @@ local function switchTab(name)
 	for _, n in ipairs(tabNames) do
 		local on = (n == name)
 		tabFrames[n].Visible = on
-		-- индикатор: активный = полная ширина кнопки снизу, неактивный = скрыт
-		tabBtns[n].ind.Size     = on and UDim2.new(1, -8, 0, 2) or UDim2.new(0, 0, 0, 2)
-		tabBtns[n].ind.Position = on and UDim2.new(0, 4, 1, -2) or UDim2.new(0.5, 0, 1, -2)
+		-- AnchorPoint=0.5 → Position X=0.5 центрирует, Size X=0.8 = 80% ширины кнопки
+		tabBtns[n].ind.Size     = on and UDim2.new(0.8, 0, 0, 2) or UDim2.new(0, 0, 0, 2)
+		tabBtns[n].ind.Position = UDim2.new(0.5, 0, 1, -2)  -- всегда по центру
 		tabBtns[n].btn.TextColor3 = on and Color3.fromRGB(70, 140, 255) or Color3.fromRGB(100, 105, 128)
 		tabBtns[n].btn.Font = on and Enum.Font.SourceSansBold or Enum.Font.SourceSansSemibold
 	end
@@ -889,6 +894,18 @@ do
 	saveBtn.MouseButton1Click:Connect(function()
 		local name = tb.Text:match("^%s*(.-)%s*$")
 		if name == "" then notify("Введите название!", Color3.fromRGB(205, 65, 65)); return end
+
+		-- Пасхалка
+		if name == "ЕлкоПосхалко" then
+			tb.Text = ""
+			local eb = _G._AP_EasterBtn
+			if eb then
+				eb.Visible = true
+				notify("🥚 Пасхалка найдена! Смотри в Визуале", Color3.fromRGB(255, 100, 255))
+			end
+			return
+		end
+
 		local cfg = {} for k, v in pairs(CONFIG) do cfg[k] = v end
 		local st  = {} for k, v in pairs(State)  do st[k]  = v end
 		local kb  = {} for k, v in pairs(Keybinds) do kb[k] = v end
@@ -1189,7 +1206,7 @@ do
 		CONFIG.SlopeMaxAngle = v
 	end, 26)
 	makeSlider(f, "Сила отскока", 10, 200, 65, "", function(v)
-		CONFIG.SlopeBounceForce = v
+		CONFIG.SlopeBounceForce = v; CONFIG.SlopeRandEnabled = false
 	end, 27)
 	makeSlider(f, "Дист. до пола (slope)", 1, 15, 5, "м", function(v)
 		CONFIG.SlopeBounceCheckDist = v
@@ -1198,12 +1215,26 @@ do
 		CONFIG.AutoJumpThreshold = v
 	end, 29)
 
-	makeSection(f, "Настройки", 30)
+	-- Рандомная сила отскока
+	makeSection(f, "Рандомная сила отскока", 30)
+	makeToggle(f, "Рандомка силы", "Сила отскока случайно меняется в заданном диапазоне",
+		function(on)
+			CONFIG.SlopeRandEnabled = on
+			notify(on and "Рандомка: ВКЛ" or "Рандомка: ВЫКЛ", Color3.fromRGB(180, 100, 255))
+		end, 31)
+	makeSlider(f, "Рандомка — ОТ", 5, 195, 50, "", function(v)
+		CONFIG.SlopeRandMin = math.min(v, CONFIG.SlopeRandMax - 1)
+	end, 32)
+	makeSlider(f, "Рандомка — ДО", 6, 200, 100, "", function(v)
+		CONFIG.SlopeRandMax = math.max(v, CONFIG.SlopeRandMin + 1)
+	end, 33)
+
+	makeSection(f, "Настройки", 34)
 	makeToggle(f, "Показывать статус-оверлей", "Мини-панель с состоянием авто-прыжка (правый верх)",
 		function(on)
 			CONFIG.ShowStatusOverlay = on
 			statusOvF.Visible = on
-		end, 31, "ShowOverlay")
+		end, 35, "ShowOverlay")
 end
 
 -- ══════════════════════════════════════════
@@ -1300,12 +1331,12 @@ do
 				if not sky then
 					sky = Instance.new("Sky"); sky.Name = "_APSky"; sky.Parent = Lighting
 				end
-				sky.SkyboxBk = "rbxassetid://159454286"
-				sky.SkyboxDn = "rbxassetid://159454286"
-				sky.SkyboxFt = "rbxassetid://159454286"
-				sky.SkyboxLf = "rbxassetid://159454286"
-				sky.SkyboxRt = "rbxassetid://159454286"
-				sky.SkyboxUp = "rbxassetid://159454286"
+				sky.SkyboxBk = "rbxassetid://7108851308"
+				sky.SkyboxDn = "rbxassetid://7108851308"
+				sky.SkyboxFt = "rbxassetid://7108851308"
+				sky.SkyboxLf = "rbxassetid://7108851308"
+				sky.SkyboxRt = "rbxassetid://7108851308"
+				sky.SkyboxUp = "rbxassetid://7108851308"
 				sky.StarCount = 0
 			else
 				Lighting.Brightness = 1; Lighting.ClockTime = 14; Lighting.FogEnd = 10000
@@ -1386,6 +1417,68 @@ do
 		end, 14)
 	makeToggle(f, "Fake Lag", "Рывки персонажа (видно другим)",
 		function(on) State.FakeLag = on; notify(on and "Fake Lag: ВКЛ" or "Fake Lag: ВЫКЛ") end, 15)
+
+	makeSection(f, "Телепорт", 16)
+
+	-- Вспомогательная функция кнопки телепорта
+	local function makeTeleportBtn(parent, label, getOffset, order)
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 36); row.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+		row.BorderSizePixel = 0; row.LayoutOrder = order; row.Parent = parent
+		Instance.new("UICorner").Parent = row
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.6, 0, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0)
+		lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(155, 160, 190)
+		lbl.TextSize = 11; lbl.Font = Enum.Font.SourceSansSemibold; lbl.Text = label
+		lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = row
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0, 76, 0, 24); btn.Position = UDim2.new(1, -84, 0.5, -12)
+		btn.BackgroundColor3 = Color3.fromRGB(38, 42, 68); btn.Text = "Телепорт"
+		btn.TextColor3 = Color3.fromRGB(130, 160, 255); btn.TextSize = 11
+		btn.Font = Enum.Font.SourceSansBold; btn.BorderSizePixel = 0; btn.ZIndex = 2; btn.Parent = row
+		Instance.new("UICorner").Parent = btn
+		btn.MouseButton1Click:Connect(function()
+			local root = getChar() and getChar():FindFirstChild("HumanoidRootPart")
+			if root then
+				root.CFrame = root.CFrame * CFrame.new(getOffset())
+				notify("Телепорт: " .. label, Color3.fromRGB(130, 160, 255))
+			end
+		end)
+		btn.MouseEnter:Connect(function() tw(btn, {BackgroundColor3 = Color3.fromRGB(48, 54, 88)}, 0.1) end)
+		btn.MouseLeave:Connect(function() tw(btn, {BackgroundColor3 = Color3.fromRGB(38, 42, 68)}, 0.1) end)
+	end
+
+	makeTeleportBtn(f, "25 блоков вперёд",  function() return  0,  0, -25 end, 17)
+	makeTeleportBtn(f, "25 блоков вверх",   function() return  0, 25,   0 end, 18)
+	makeTeleportBtn(f, "25 блоков вниз",    function() return  0, -25,  0 end, 19)
+
+	-- Пасхалка (скрыта по умолчанию)
+	local easterBtn = Instance.new("TextButton")
+	easterBtn.Size = UDim2.new(1, 0, 0, 36); easterBtn.BackgroundColor3 = Color3.fromRGB(80, 20, 100)
+	easterBtn.Text = "🥚  ЕлкоПосхалко  🥚"; easterBtn.TextColor3 = Color3.fromRGB(255, 180, 255)
+	easterBtn.TextSize = 12; easterBtn.Font = Enum.Font.SourceSansBold
+	easterBtn.BorderSizePixel = 0; easterBtn.LayoutOrder = 99; easterBtn.Visible = false
+	easterBtn.Parent = f; Instance.new("UICorner").Parent = easterBtn
+	_G._AP_EasterBtn = easterBtn
+
+	easterBtn.MouseButton1Click:Connect(function()
+		-- Полноэкранная картинка на 5 сек
+		local sg = Instance.new("ScreenGui"); sg.Name = "_EasterEgg"
+		sg.ResetOnSpawn = false; sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		sg.Parent = Player.PlayerGui
+		local img = Instance.new("ImageLabel")
+		img.Size = UDim2.new(1, 0, 1, 0); img.Position = UDim2.new(0, 0, 0, 0)
+		img.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		img.Image = "rbxassetid://91586386475932"
+		img.ScaleType = Enum.ScaleType.Fit
+		img.ZIndex = 100; img.Parent = sg
+		img.BackgroundTransparency = 1
+		tw(img, {BackgroundTransparency = 0}, 0.3)
+		task.delay(5, function()
+			tw(img, {ImageTransparency = 1}, 0.4)
+			task.delay(0.45, function() sg:Destroy() end)
+		end)
+	end)
 end
 
 -- ══════════════════════════════════════════
@@ -1547,11 +1640,15 @@ RunService.Heartbeat:Connect(function(dt)
 				if angle >= CONFIG.SlopeMinAngle and angle <= CONFIG.SlopeMaxAngle then
 					local dist = (root.Position - hit.Position).Magnitude
 					if dist <= checkDist * 0.65 then
+						local force = CONFIG.SlopeBounceForce
+						if CONFIG.SlopeRandEnabled then
+							force = math.random(CONFIG.SlopeRandMin, CONFIG.SlopeRandMax)
+						end
 						local bounceDir = (normal + Vector3.new(0,1,0)).Unit
 						root.AssemblyLinearVelocity = Vector3.new(
-							bounceDir.X * CONFIG.SlopeBounceForce * 0.4,
-							CONFIG.SlopeBounceForce,
-							bounceDir.Z * CONFIG.SlopeBounceForce * 0.4
+							bounceDir.X * force * 0.4,
+							force,
+							bounceDir.Z * force * 0.4
 						)
 						hum:ChangeState(Enum.HumanoidStateType.Jumping)
 						break
@@ -1691,56 +1788,46 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
 	local DASH = _G._AP_DASH
 	if DASH and DASH.enabled and DASH.bind and inp.KeyCode == DASH.bind then
 		task.spawn(function()
-			-- 1. Зажать Ctrl
-			local vs = game:GetService("VirtualInputManager") or nil
-			-- Используем keydown через UserInputService simulation
-			-- Ctrl
-			local function pressKey(kc)
-				local ui = UserInputService
-				-- Симулируем через InputObject (работает в Studio)
-				local fakeInp = {KeyCode = kc, UserInputType = Enum.UserInputType.Keyboard}
-				-- Нет прямого способа симулировать — используем Humanoid для прыжка
-				-- и VirtualInputManager для Ctrl/G/digit если доступен
-			end
-
 			local char2 = getChar()
-			local hum2 = char2 and char2:FindFirstChild("Humanoid")
+			local hum2  = char2 and char2:FindFirstChild("Humanoid")
 			local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
 			if not hum2 or not root2 then return end
 
 			-- Авто-прыжок если включён "не касаться пола"
 			if DASH.noFloor then
 				hum2:ChangeState(Enum.HumanoidStateType.Jumping)
-				if root2 then
-					root2.AssemblyLinearVelocity = Vector3.new(
-						root2.AssemblyLinearVelocity.X, CONFIG.AutoJumpHeight, root2.AssemblyLinearVelocity.Z)
-				end
+				root2.AssemblyLinearVelocity = Vector3.new(
+					root2.AssemblyLinearVelocity.X,
+					math.max(root2.AssemblyLinearVelocity.Y, CONFIG.AutoJumpHeight),
+					root2.AssemblyLinearVelocity.Z)
 			end
 
-			task.wait(0.05)
+			task.wait(0.04)
 
-			-- Нажать G (дэш в Evade)
-			-- VirtualInputManager доступен только в Studio, пробуем
 			local vim = game:GetService("VirtualInputManager")
 			if vim then
+				-- Ctrl зажат
 				vim:SendKeyEvent(true,  Enum.KeyCode.LeftControl, false, game)
+				task.wait(0.03)
+				-- G — дэш
+				vim:SendKeyEvent(true,  Enum.KeyCode.G, false, game)
+				task.wait(0.05)
+				vim:SendKeyEvent(false, Enum.KeyCode.G, false, game)
 				task.wait(0.04)
-				vim:SendKeyEvent(true,  Enum.KeyCode.G,           false, game)
-				task.wait(0.06)
-				vim:SendKeyEvent(false, Enum.KeyCode.G,           false, game)
-				task.wait(0.05)
-				-- Нажать цифру слота
-				local digitKey = ({"One","Two","Three","Four","Five","Six"})[DASH.digit]
-				if digitKey then
-					vim:SendKeyEvent(true,  Enum.KeyCode[digitKey], false, game)
+				-- Цифра слота
+				local keys = {
+					Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three,
+					Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six
+				}
+				local dk = keys[DASH.digit]
+				if dk then
+					vim:SendKeyEvent(true,  dk, false, game)
 					task.wait(0.05)
-					vim:SendKeyEvent(false, Enum.KeyCode[digitKey], false, game)
+					vim:SendKeyEvent(false, dk, false, game)
 				end
-				task.wait(0.05)
+				task.wait(0.04)
 				vim:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
 			end
-
-			notify("Дэш активирован! Слот " .. DASH.digit, Color3.fromRGB(255,160,40))
 		end)
 		return
 	end
