@@ -609,60 +609,53 @@ end
 -- ══════════════════════════════════════════
 local statusOvF = Instance.new("Frame")
 statusOvF.Name = "StatusOverlay"
-statusOvF.Size = UDim2.new(0, 145, 0, 46)
-statusOvF.Position = UDim2.new(1, -155, 0, 55)
+statusOvF.Size = UDim2.new(0, 165, 0, 64)
+statusOvF.Position = UDim2.new(1, -175, 0, 52)
 statusOvF.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
 statusOvF.BackgroundTransparency = 0.15
 statusOvF.BorderSizePixel = 0; statusOvF.ZIndex = 30
-statusOvF.Visible = false   -- скрыт по умолчанию, включается в настройках
+statusOvF.Visible = false
 statusOvF.Parent = ScreenGui
 Instance.new("UICorner").Parent = statusOvF
 
--- Верхняя цветная линия
 local ovLine = Instance.new("Frame")
 ovLine.Size = UDim2.new(1, 0, 0, 2); ovLine.BackgroundColor3 = Color3.fromRGB(60, 120, 255)
 ovLine.BorderSizePixel = 0; ovLine.ZIndex = 31; ovLine.Parent = statusOvF
-do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = ovLine
-	local g = Instance.new("UIGradient")
-	g.Color = ColorSequence.new{
-		ColorSequenceKeypoint.new(0,   Color3.fromRGB(50, 110, 255)),
-		ColorSequenceKeypoint.new(1,   Color3.fromRGB(140, 50, 255)),
-	}; g.Parent = ovLine
-end
+Instance.new("UICorner").Parent = ovLine
 
 local ovTitle = Instance.new("TextLabel")
-ovTitle.Size = UDim2.new(1, -10, 0, 13); ovTitle.Position = UDim2.new(0, 8, 0, 5)
+ovTitle.Size = UDim2.new(1, -10, 0, 12); ovTitle.Position = UDim2.new(0, 8, 0, 4)
 ovTitle.BackgroundTransparency = 1; ovTitle.TextColor3 = Color3.fromRGB(60, 120, 255)
 ovTitle.TextSize = 8; ovTitle.Font = Enum.Font.SourceSansBold
 ovTitle.Text = "СТАТУС ФУНКЦИЙ"; ovTitle.TextXAlignment = Enum.TextXAlignment.Left
 ovTitle.ZIndex = 31; ovTitle.Parent = statusOvF
 
--- Авто-прыжок строка
-local ovRow = Instance.new("Frame")
-ovRow.Size = UDim2.new(1, -16, 0, 16); ovRow.Position = UDim2.new(0, 8, 0, 22)
-ovRow.BackgroundTransparency = 1; ovRow.ZIndex = 31; ovRow.Parent = statusOvF
+local function makeOvRow(yPos, label)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -16, 0, 16); row.Position = UDim2.new(0, 8, 0, yPos)
+	row.BackgroundTransparency = 1; row.ZIndex = 31; row.Parent = statusOvF
+	local dot = Instance.new("Frame")
+	dot.Size = UDim2.new(0, 7, 0, 7); dot.Position = UDim2.new(0, 0, 0.5, -3.5)
+	dot.BackgroundColor3 = Color3.fromRGB(170, 45, 45); dot.BorderSizePixel = 0
+	dot.ZIndex = 32; dot.Parent = row; Instance.new("UICorner").Parent = dot
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -12, 1, 0); lbl.Position = UDim2.new(0, 12, 0, 0)
+	lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(105, 110, 138)
+	lbl.TextSize = 10; lbl.Font = Enum.Font.SourceSansSemibold; lbl.Text = label
+	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 32; lbl.Parent = row
+	return dot, lbl
+end
 
-local ovDot = Instance.new("Frame")
-ovDot.Size = UDim2.new(0, 8, 0, 8); ovDot.Position = UDim2.new(0, 0, 0.5, -4)
-ovDot.BackgroundColor3 = Color3.fromRGB(170, 45, 45); ovDot.BorderSizePixel = 0
-ovDot.ZIndex = 32; ovDot.Parent = ovRow; Instance.new("UICorner").Parent = ovDot
-
-local ovLbl = Instance.new("TextLabel")
-ovLbl.Size = UDim2.new(1, -14, 1, 0); ovLbl.Position = UDim2.new(0, 13, 0, 0)
-ovLbl.BackgroundTransparency = 1; ovLbl.TextColor3 = Color3.fromRGB(105, 110, 138)
-ovLbl.TextSize = 10; ovLbl.Font = Enum.Font.SourceSansSemibold
-ovLbl.Text = "Авто-прыжок у пола"; ovLbl.TextXAlignment = Enum.TextXAlignment.Left
-ovLbl.ZIndex = 32; ovLbl.Parent = ovRow
+local ovDot, ovLbl   = makeOvRow(20, "Авто-прыжок у пола")
+local ovDot2, ovLbl2 = makeOvRow(40, "Slope Bounce")
 
 local function updateStatusOverlay()
-	if State.AutoJump then
-		tw(ovDot, {BackgroundColor3 = Color3.fromRGB(50, 210, 100)}, 0.2)
-		tw(ovLbl, {TextColor3 = Color3.fromRGB(185, 195, 225)}, 0.2)
-	else
-		tw(ovDot, {BackgroundColor3 = Color3.fromRGB(170, 45, 45)}, 0.2)
-		tw(ovLbl, {TextColor3 = Color3.fromRGB(105, 110, 138)}, 0.2)
+	local function setRow(dot, lbl, on)
+		tw(dot, {BackgroundColor3 = on and Color3.fromRGB(50,210,100) or Color3.fromRGB(170,45,45)}, 0.2)
+		tw(lbl, {TextColor3 = on and Color3.fromRGB(185,195,225) or Color3.fromRGB(105,110,138)}, 0.2)
 	end
+	setRow(ovDot,  ovLbl,  State.AutoJump)
+	setRow(ovDot2, ovLbl2, State.SlopeBounce)
 end
 
 -- ══════════════════════════════════════════
@@ -932,6 +925,9 @@ do
 	makeSlider(f, "Сила авто-прыжка", 5, 200, CONFIG.AutoJumpDefault, "", function(v)
 		CONFIG.AutoJumpHeight = v
 	end, 4)
+	makeSlider(f, "Дист. до пола (авто-прыжок)", 1, 15, CONFIG.AutoJumpThreshold, "м", function(v)
+		CONFIG.AutoJumpThreshold = v
+	end, 5)
 
 	makeSection(f, "Прыжок", 5)
 	makeToggle(f, "Высокий прыжок", "Очень высокий прыжок (JumpPower)",
@@ -1196,6 +1192,7 @@ do
 	makeToggle(f, "Slope Bounce", "Отскок от наклонных поверхностей (до касания)",
 		function(on)
 			State.SlopeBounce = on
+			updateStatusOverlay()
 			notify(on and "Slope Bounce: ВКЛ" or "Slope Bounce: ВЫКЛ", Color3.fromRGB(255, 200, 60))
 		end, 23, "SlopeBounce")
 	makeBindRow(f, "Клавиша: slope bounce", "SlopeBounce", 24)
@@ -1211,9 +1208,6 @@ do
 	makeSlider(f, "Дист. до пола (slope)", 1, 15, 5, "м", function(v)
 		CONFIG.SlopeBounceCheckDist = v
 	end, 28)
-	makeSlider(f, "Дист. до пола (авто-прыжок)", 1, 15, CONFIG.AutoJumpThreshold, "м", function(v)
-		CONFIG.AutoJumpThreshold = v
-	end, 29)
 
 	-- Рандомная сила отскока
 	makeSection(f, "Рандомная сила отскока", 30)
@@ -1513,28 +1507,23 @@ local fakeLagTimer= 0
 local fakeLagSave = nil
 local spinAngle   = 0
 
--- Постоянно применяем FOV и скорость/прыжок каждые 0.1с
--- (некоторые игры сбрасывают их через свои скрипты)
+-- FOV принудительно каждый кадр
+RunService.RenderStepped:Connect(function()
+	if State.FOVChanged then
+		local cam = workspace.CurrentCamera
+		if cam then cam.FieldOfView = CONFIG.FOV end
+	end
+end)
+
+-- Speed/Jump каждые 0.05с (быстрее чем игра успевает сбросить)
 task.spawn(function()
 	while true do
-		task.wait(0.1)
-		-- FOV
-		if State.FOVChanged then
-			local cam = workspace.CurrentCamera
-			if cam and cam.FieldOfView ~= CONFIG.FOV then
-				cam.FieldOfView = CONFIG.FOV
-			end
-		end
-		-- Speed & Jump — ищем Humanoid в текущем персонаже
+		task.wait(0.05)
 		local char = getChar()
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if hum then
-			if State.SpeedHack and hum.WalkSpeed ~= CONFIG.WalkSpeed then
-				hum.WalkSpeed = CONFIG.WalkSpeed
-			end
-			if State.HighJump and hum.JumpPower ~= CONFIG.HighJumpPower then
-				hum.JumpPower = CONFIG.HighJumpPower
-			end
+			if State.SpeedHack  then hum.WalkSpeed = CONFIG.WalkSpeed    end
+			if State.HighJump   then hum.JumpPower = CONFIG.HighJumpPower end
 		end
 	end
 end)
@@ -1577,24 +1566,27 @@ local function createTrail()
 	trail.Lifetime = 0.7; trail.MinLength = 0; trail.Parent = root
 end
 
--- Bot ESP в отдельном потоке (не каждый кадр)
+-- Bot ESP в отдельном потоке
 task.spawn(function()
-	while true do task.wait(0.6)
+	while true do task.wait(0.5)
 		if State.BotESP then
 			local char = getChar()
-			for _, model in ipairs(workspace:GetChildren()) do
-				if model:IsA("Model") and model ~= char then
-					local mHum = model:FindFirstChildOfClass("Humanoid")
-					if mHum then
-						local isPlayer = false
-						for _, p in ipairs(Players:GetPlayers()) do
-							if p.Character == model then isPlayer = true; break end
-						end
-						if not isPlayer then
-							ensureHL(model, "_BotHL", Color3.fromRGB(255,60,60), Color3.fromRGB(255,120,120))
-						end
+			local playerChars = {}
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p.Character then playerChars[p.Character] = true end
+			end
+			-- Ищем все модели с Humanoid в workspace (включая папки)
+			for _, model in ipairs(workspace:GetDescendants()) do
+				if model:IsA("Model") and model ~= char and not playerChars[model] then
+					if model:FindFirstChildOfClass("Humanoid") then
+						ensureHL(model, "_BotHL", Color3.fromRGB(255,60,60), Color3.fromRGB(255,120,120))
 					end
 				end
+			end
+		else
+			-- Убираем подсветку если выключено
+			for _, d in ipairs(workspace:GetDescendants()) do
+				if d:IsA("Highlight") and d.Name == "_BotHL" then d:Destroy() end
 			end
 		end
 	end
@@ -1663,19 +1655,13 @@ RunService.Heartbeat:Connect(function(dt)
 		hum:ChangeState(Enum.HumanoidStateType.Jumping)
 	end
 
-	-- Spinbot (BodyAngularVelocity — плавное вращение без дёрганья)
+	-- Spinbot: плавное вращение через CFrame каждый кадр
 	if State.Spinbot then
-		local bav = root:FindFirstChild("_SpinBAV")
-		if not bav then
-			bav = Instance.new("BodyAngularVelocity")
-			bav.Name = "_SpinBAV"
-			bav.MaxTorque = Vector3.new(0, math.huge, 0)
-			bav.Parent = root
-		end
-		bav.AngularVelocity = Vector3.new(0, CONFIG.SpinSpeed, 0)
-	else
-		local bav = root:FindFirstChild("_SpinBAV")
-		if bav then bav:Destroy() end
+		local cf = root.CFrame
+		local newCF = cf * CFrame.Angles(0, math.rad(CONFIG.SpinSpeed), 0)
+		root.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesXYZ(0, newCF:ToEulerAnglesXYZ(), 0)
+		-- Убрать старый BAV если остался
+		local bav = root:FindFirstChild("_SpinBAV"); if bav then bav:Destroy() end
 	end
 
 	-- Fake Lag: визуальный рывок (task.defer - почти без задержки, не блокирует движение)
@@ -1793,40 +1779,42 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
 			local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
 			if not hum2 or not root2 then return end
 
-			-- Авто-прыжок если включён "не касаться пола"
+			-- Прыжок (всегда, независимо от noFloor)
+			hum2:ChangeState(Enum.HumanoidStateType.Jumping)
 			if DASH.noFloor then
-				hum2:ChangeState(Enum.HumanoidStateType.Jumping)
 				root2.AssemblyLinearVelocity = Vector3.new(
 					root2.AssemblyLinearVelocity.X,
 					math.max(root2.AssemblyLinearVelocity.Y, CONFIG.AutoJumpHeight),
 					root2.AssemblyLinearVelocity.Z)
 			end
 
-			task.wait(0.04)
+			task.wait(0.06)
 
-			local vim = game:GetService("VirtualInputManager")
-			if vim then
-				-- Ctrl зажат
-				vim:SendKeyEvent(true,  Enum.KeyCode.LeftControl, false, game)
-				task.wait(0.03)
-				-- G — дэш
-				vim:SendKeyEvent(true,  Enum.KeyCode.G, false, game)
+			-- Ctrl + G + цифра через VirtualInputManager
+			local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
+			if ok and vim then
+				local function vk(down, key)
+					pcall(function() vim:SendKeyEvent(down, key, false, game) end)
+				end
+				vk(true,  Enum.KeyCode.LeftControl)
 				task.wait(0.05)
-				vim:SendKeyEvent(false, Enum.KeyCode.G, false, game)
-				task.wait(0.04)
-				-- Цифра слота
-				local keys = {
+				vk(true,  Enum.KeyCode.G)
+				task.wait(0.06)
+				vk(false, Enum.KeyCode.G)
+				task.wait(0.05)
+				local digitKeys = {
 					Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three,
 					Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six
 				}
-				local dk = keys[DASH.digit]
+				local dk = digitKeys[DASH.digit]
 				if dk then
-					vim:SendKeyEvent(true,  dk, false, game)
-					task.wait(0.05)
-					vim:SendKeyEvent(false, dk, false, game)
+					vk(true,  dk); task.wait(0.05); vk(false, dk)
 				end
-				task.wait(0.04)
-				vim:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+				task.wait(0.05)
+				vk(false, Enum.KeyCode.LeftControl)
+				notify("Дэш! Слот " .. DASH.digit, Color3.fromRGB(255,160,40))
+			else
+				notify("Дэш: прыжок выполнен (VIM недоступен)", Color3.fromRGB(255,160,40))
 			end
 		end)
 		return
