@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║        ADMIN PANEL v4 — Roblox Studio LocalScript           ║
+-- ║        ADMIN PANEL v5 — Roblox Studio LocalScript           ║
 -- ║   StarterPlayer › StarterPlayerScripts                      ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
@@ -13,6 +13,76 @@ local Player    = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
 local Humanoid  = Character:WaitForChild("Humanoid")
 local RootPart  = Character:WaitForChild("HumanoidRootPart")
+
+-- ══════════════════════════════════════════
+--  ЛИЦЕНЗИОННАЯ СИСТЕМА
+-- ══════════════════════════════════════════
+local ADMINS = {"Matik202022", "YuraSiYuraSi", "eeee"}
+
+-- Лицензии: username → {permanent=true} или {expiry=os.time()+seconds}
+local Licenses = {
+	Matik202022 = {permanent = true},
+	YuraSiYuraSi = {permanent = true},
+	eeee         = {permanent = true},
+}
+
+local function isAdmin(name)
+	for _, a in ipairs(ADMINS) do if a == name then return true end end
+	return false
+end
+
+local function getLicense(name)
+	return Licenses[name]
+end
+
+local function isLicensed(name)
+	local lic = getLicense(name)
+	if not lic then return false end
+	if lic.permanent then return true end
+	return os.time() < lic.expiry
+end
+
+local function getTimeLeft(name)
+	local lic = getLicense(name)
+	if not lic then return nil end
+	if lic.permanent then return "Навсегда🤑" end
+	local secs = math.max(0, lic.expiry - os.time())
+	if secs == 0 then return "Истекло" end
+	local mins  = math.floor(secs / 60)
+	local hours = math.floor(mins / 60)
+	local days  = math.floor(hours / 24)
+	local weeks = math.floor(days / 7)
+	local months= math.floor(days / 30)
+	if months >= 1 then
+		return months .. " мес. " .. (days % 30) .. " дн."
+	elseif weeks >= 1 then
+		return weeks .. " нед. " .. (days % 7) .. " дн."
+	elseif days >= 1 then
+		return days .. " дн. " .. (hours % 24) .. " ч."
+	elseif hours >= 1 then
+		return hours .. " ч. " .. (mins % 60) .. " мин."
+	else
+		return mins .. " мин."
+	end
+end
+
+local function addLicense(username, seconds) -- seconds=nil → навсегда
+	if seconds then
+		Licenses[username] = {expiry = os.time() + seconds}
+	else
+		Licenses[username] = {permanent = true}
+	end
+end
+
+local function removeLicense(username)
+	Licenses[username] = nil
+end
+
+-- Проверяем текущего игрока
+local MY_LICENSED = isLicensed(Player.Name)
+local MY_ADMIN    = isAdmin(Player.Name)
+
+
 
 -- ══════════════════════════════════════════
 --  CONFIG
@@ -162,10 +232,29 @@ end
 --  SCREEN GUI
 -- ══════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AdminPanelGUI_v4"
+ScreenGui.Name = "AdminPanelGUI_v5"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = Player.PlayerGui
+
+-- Если не лицензирован — кнопка купить + стоп
+if not MY_LICENSED then
+	local buyBtn = Instance.new("TextButton")
+	buyBtn.Size = UDim2.new(0, 230, 0, 44)
+	buyBtn.Position = UDim2.new(0.5, -115, 1, -62)
+	buyBtn.BackgroundColor3 = Color3.fromRGB(18, 20, 32)
+	buyBtn.TextColor3 = Color3.fromRGB(160, 190, 255)
+	buyBtn.TextSize = 14; buyBtn.Font = Enum.Font.SourceSansBold
+	buyBtn.Text = "🛒  Купить в тгк: Pixie"
+	buyBtn.BorderSizePixel = 0; buyBtn.ZIndex = 100
+	buyBtn.BackgroundTransparency = 1; buyBtn.Parent = ScreenGui
+	Instance.new("UICorner").Parent = buyBtn
+	local bl = Instance.new("Frame"); bl.Size = UDim2.new(1,0,0,2)
+	bl.BackgroundColor3 = Color3.fromRGB(70,130,255); bl.BorderSizePixel=0; bl.ZIndex=101; bl.Parent=buyBtn
+	Instance.new("UICorner").Parent = bl
+	TweenService:Create(buyBtn, TweenInfo.new(0.5, Enum.EasingStyle.Back), {BackgroundTransparency=0}):Play()
+	return
+end
 
 -- ══════════════════════════════════════════
 --  ГЛАВНОЕ ОКНО  (500 × 400)
@@ -786,10 +875,64 @@ do
 		end
 	end)
 
-	makeSection(f, "О панели", 5)
+	-- Лицензия игрока
+	makeSection(f, "Лицензия", 5)
+	local licCard = Instance.new("Frame")
+	licCard.Size = UDim2.new(1, 0, 0, 46)
+	licCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
+	licCard.BorderSizePixel = 0; licCard.LayoutOrder = 6; licCard.Parent = f
+	Instance.new("UICorner").Parent = licCard
+
+	local licLine = Instance.new("Frame")
+	licLine.Size = UDim2.new(0, 3, 0.7, 0); licLine.Position = UDim2.new(0, 0, 0.15, 0)
+	licLine.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+	licLine.BorderSizePixel = 0; licLine.Parent = licCard; Instance.new("UICorner").Parent = licLine
+
+	local licLbl = Instance.new("TextLabel")
+	licLbl.Size = UDim2.new(1, -20, 0, 16); licLbl.Position = UDim2.new(0, 12, 0, 7)
+	licLbl.BackgroundTransparency = 1; licLbl.TextColor3 = Color3.fromRGB(200, 205, 225)
+	licLbl.TextSize = 11; licLbl.Font = Enum.Font.SourceSansSemibold
+	licLbl.Text = "Осталось: " .. (getTimeLeft(Player.Name) or "—")
+	licLbl.TextXAlignment = Enum.TextXAlignment.Left; licLbl.Parent = licCard
+
+	local licBtn = Instance.new("TextButton")
+	licBtn.Size = UDim2.new(1, 0, 0, 46); licBtn.BackgroundTransparency = 1
+	licBtn.Text = ""; licBtn.AutoButtonColor = false; licBtn.ZIndex = 2; licBtn.Parent = licCard
+
+	-- Дождь из смайликов 🤑
+	local function emojiRain()
+		for i = 1, 22 do
+			task.spawn(function()
+				task.wait(math.random() * 1.5)
+				local lbl = Instance.new("TextLabel")
+				lbl.Size = UDim2.new(0, 36, 0, 36)
+				lbl.Position = UDim2.new(math.random() * 0.95, 0, -0.05, 0)
+				lbl.BackgroundTransparency = 1
+				lbl.Text = "🤑"; lbl.TextSize = 28
+				lbl.Font = Enum.Font.SourceSansBold
+				lbl.ZIndex = 200; lbl.Parent = ScreenGui
+				local fall = TweenService:Create(lbl,
+					TweenInfo.new(2.5 + math.random(), Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+					{Position = UDim2.new(lbl.Position.X.Scale, 0, 1.1, 0)})
+				fall:Play()
+				fall.Completed:Connect(function() lbl:Destroy() end)
+			end)
+		end
+	end
+	licBtn.MouseButton1Click:Connect(emojiRain)
+
+	-- Обновляем время каждые 30с
+	task.spawn(function()
+		while licCard.Parent do
+			task.wait(30)
+			licLbl.Text = "Осталось: " .. (getTimeLeft(Player.Name) or "—")
+		end
+	end)
+
+	makeSection(f, "О панели", 7)
 	local aboutCard = Instance.new("Frame")
 	aboutCard.Size = UDim2.new(1, 0, 0, 40); aboutCard.BackgroundColor3 = Color3.fromRGB(19, 19, 26)
-	aboutCard.BorderSizePixel = 0; aboutCard.LayoutOrder = 6; aboutCard.Parent = f
+	aboutCard.BorderSizePixel = 0; aboutCard.LayoutOrder = 8; aboutCard.Parent = f
 	Instance.new("UICorner").Parent = aboutCard
 	local al = Instance.new("TextLabel"); al.Size=UDim2.new(1,-16,1,0); al.Position=UDim2.new(0,8,0,0)
 	al.BackgroundTransparency=1; al.TextColor3=Color3.fromRGB(90,95,120); al.TextSize=10
@@ -1496,6 +1639,136 @@ do
 	makeInfoCard(f,"Rainbow Trail","Радужный Trail-эффект за персонажем.",14)
 	makeInfoCard(f,"Spinbot","BodyAngularVelocity вращает персонажа. Не мешает управлению.",15)
 	makeInfoCard(f,"Fake Lag","Периодически снэпает позицию назад — выглядит как лаг для всех.",16)
+
+	-- Панель администратора (только для admins)
+	if MY_ADMIN then
+		makeSection(f, "🔑 Управление лицензиями", 20)
+
+		-- Поиск / просмотр
+		local searchRow = Instance.new("Frame")
+		searchRow.Size = UDim2.new(1,0,0,32); searchRow.BackgroundColor3 = Color3.fromRGB(19,19,26)
+		searchRow.BorderSizePixel=0; searchRow.LayoutOrder=21; searchRow.Parent=f
+		Instance.new("UICorner").Parent=searchRow
+		local searchTb = Instance.new("TextBox")
+		searchTb.Size=UDim2.new(1,-90,0,22); searchTb.Position=UDim2.new(0,6,0.5,-11)
+		searchTb.BackgroundColor3=Color3.fromRGB(25,27,44); searchTb.TextColor3=Color3.fromRGB(190,195,220)
+		searchTb.PlaceholderText="Юзернейм игрока..."; searchTb.PlaceholderColor3=Color3.fromRGB(65,68,95)
+		searchTb.TextSize=11; searchTb.Font=Enum.Font.SourceSansSemibold; searchTb.BorderSizePixel=0
+		searchTb.Text=""; searchTb.ZIndex=2; searchTb.Parent=searchRow
+		Instance.new("UICorner").Parent=searchTb
+		local tbPad2=Instance.new("UIPadding"); tbPad2.PaddingLeft=UDim.new(0,6); tbPad2.Parent=searchTb
+
+		-- Результат поиска
+		local resultCard = Instance.new("Frame")
+		resultCard.Size=UDim2.new(1,0,0,0); resultCard.AutomaticSize=Enum.AutomaticSize.Y
+		resultCard.BackgroundColor3=Color3.fromRGB(22,22,34); resultCard.BorderSizePixel=0
+		resultCard.LayoutOrder=22; resultCard.Visible=false; resultCard.Parent=f
+		Instance.new("UICorner").Parent=resultCard
+		local rcPad=Instance.new("UIPadding"); rcPad.PaddingLeft=UDim.new(0,10); rcPad.PaddingRight=UDim.new(0,10)
+		rcPad.PaddingTop=UDim.new(0,8); rcPad.PaddingBottom=UDim.new(0,8); rcPad.Parent=resultCard
+		local rcLbl=Instance.new("TextLabel"); rcLbl.Size=UDim2.new(1,0,0,0); rcLbl.AutomaticSize=Enum.AutomaticSize.Y
+		rcLbl.BackgroundTransparency=1; rcLbl.TextColor3=Color3.fromRGB(180,185,215); rcLbl.TextSize=11
+		rcLbl.Font=Enum.Font.SourceSans; rcLbl.TextWrapped=true; rcLbl.TextXAlignment=Enum.TextXAlignment.Left
+		rcLbl.Text=""; rcLbl.Parent=resultCard
+
+		local function refreshResult(name)
+			local lic = getLicense(name)
+			if not lic then
+				rcLbl.Text = name .. ": нет лицензии"
+				rcLbl.TextColor3 = Color3.fromRGB(200,80,80)
+			else
+				rcLbl.Text = name .. "\nОсталось: " .. (getTimeLeft(name) or "—")
+				rcLbl.TextColor3 = Color3.fromRGB(80,200,130)
+			end
+			resultCard.Visible = true
+		end
+
+		local searchBtn = Instance.new("TextButton")
+		searchBtn.Size=UDim2.new(0,72,0,22); searchBtn.Position=UDim2.new(1,-78,0.5,-11)
+		searchBtn.BackgroundColor3=Color3.fromRGB(40,80,200); searchBtn.Text="Найти"
+		searchBtn.TextColor3=Color3.fromRGB(225,230,255); searchBtn.TextSize=11
+		searchBtn.Font=Enum.Font.SourceSansBold; searchBtn.BorderSizePixel=0; searchBtn.ZIndex=2
+		searchBtn.Parent=searchRow; Instance.new("UICorner").Parent=searchBtn
+		searchBtn.MouseButton1Click:Connect(function()
+			local name = searchTb.Text:match("^%s*(.-)%s*$")
+			if name ~= "" then refreshResult(name) end
+		end)
+
+		-- Добавить / изменить лицензию
+		makeSection(f, "Добавить лицензию", 23)
+		local addRow = Instance.new("Frame")
+		addRow.Size=UDim2.new(1,0,0,32); addRow.BackgroundColor3=Color3.fromRGB(19,19,26)
+		addRow.BorderSizePixel=0; addRow.LayoutOrder=24; addRow.Parent=f
+		Instance.new("UICorner").Parent=addRow
+		local addTb = Instance.new("TextBox")
+		addTb.Size=UDim2.new(0.52,0,0,22); addTb.Position=UDim2.new(0,6,0.5,-11)
+		addTb.BackgroundColor3=Color3.fromRGB(25,27,44); addTb.TextColor3=Color3.fromRGB(190,195,220)
+		addTb.PlaceholderText="Юзернейм..."; addTb.PlaceholderColor3=Color3.fromRGB(65,68,95)
+		addTb.TextSize=10; addTb.Font=Enum.Font.SourceSansSemibold; addTb.BorderSizePixel=0
+		addTb.Text=""; addTb.ZIndex=2; addTb.Parent=addRow; Instance.new("UICorner").Parent=addTb
+		local tbPad3=Instance.new("UIPadding"); tbPad3.PaddingLeft=UDim.new(0,5); tbPad3.Parent=addTb
+
+		local durTb = Instance.new("TextBox")
+		durTb.Size=UDim2.new(0.26,0,0,22); durTb.Position=UDim2.new(0.54,0,0.5,-11)
+		durTb.BackgroundColor3=Color3.fromRGB(25,27,44); durTb.TextColor3=Color3.fromRGB(190,195,220)
+		durTb.PlaceholderText="дней/нав."; durTb.PlaceholderColor3=Color3.fromRGB(65,68,95)
+		durTb.TextSize=10; durTb.Font=Enum.Font.SourceSansSemibold; durTb.BorderSizePixel=0
+		durTb.Text=""; durTb.ZIndex=2; durTb.Parent=addRow; Instance.new("UICorner").Parent=durTb
+
+		local addBtn = Instance.new("TextButton")
+		addBtn.Size=UDim2.new(0,34,0,22); addBtn.Position=UDim2.new(1,-40,0.5,-11)
+		addBtn.BackgroundColor3=Color3.fromRGB(36,160,80); addBtn.Text="✔"
+		addBtn.TextColor3=Color3.fromRGB(255,255,255); addBtn.TextSize=14
+		addBtn.Font=Enum.Font.SourceSansBold; addBtn.BorderSizePixel=0; addBtn.ZIndex=2
+		addBtn.Parent=addRow; Instance.new("UICorner").Parent=addBtn
+
+		addBtn.MouseButton1Click:Connect(function()
+			local uname = addTb.Text:match("^%s*(.-)%s*$")
+			local dur   = durTb.Text:match("^%s*(.-)%s*$")
+			if uname == "" then return end
+			if dur == "" or dur:lower() == "навсегда" or dur == "∞" then
+				addLicense(uname, nil)
+				notify("Навсегда: " .. uname, Color3.fromRGB(255,200,50))
+			else
+				local days = tonumber(dur)
+				if days and days > 0 then
+					addLicense(uname, math.floor(days * 86400))
+					notify(uname .. ": " .. days .. " дн.", Color3.fromRGB(80,200,130))
+				else
+					notify("Неверный формат!", Color3.fromRGB(200,80,80)); return
+				end
+			end
+			addTb.Text = ""; durTb.Text = ""
+			refreshResult(uname)
+		end)
+
+		-- Убрать лицензию
+		makeSection(f, "Убрать лицензию", 25)
+		local delRow = Instance.new("Frame")
+		delRow.Size=UDim2.new(1,0,0,32); delRow.BackgroundColor3=Color3.fromRGB(19,19,26)
+		delRow.BorderSizePixel=0; delRow.LayoutOrder=26; delRow.Parent=f
+		Instance.new("UICorner").Parent=delRow
+		local delTb = Instance.new("TextBox")
+		delTb.Size=UDim2.new(1,-90,0,22); delTb.Position=UDim2.new(0,6,0.5,-11)
+		delTb.BackgroundColor3=Color3.fromRGB(25,27,44); delTb.TextColor3=Color3.fromRGB(190,195,220)
+		delTb.PlaceholderText="Юзернейм..."; delTb.PlaceholderColor3=Color3.fromRGB(65,68,95)
+		delTb.TextSize=11; delTb.Font=Enum.Font.SourceSansSemibold; delTb.BorderSizePixel=0
+		delTb.Text=""; delTb.ZIndex=2; delTb.Parent=delRow; Instance.new("UICorner").Parent=delTb
+		local tbPad4=Instance.new("UIPadding"); tbPad4.PaddingLeft=UDim.new(0,6); tbPad4.Parent=delTb
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size=UDim2.new(0,72,0,22); delBtn.Position=UDim2.new(1,-78,0.5,-11)
+		delBtn.BackgroundColor3=Color3.fromRGB(160,40,40); delBtn.Text="Удалить"
+		delBtn.TextColor3=Color3.fromRGB(255,255,255); delBtn.TextSize=11
+		delBtn.Font=Enum.Font.SourceSansBold; delBtn.BorderSizePixel=0; delBtn.ZIndex=2
+		delBtn.Parent=delRow; Instance.new("UICorner").Parent=delBtn
+		delBtn.MouseButton1Click:Connect(function()
+			local name = delTb.Text:match("^%s*(.-)%s*$")
+			if name == "" then return end
+			removeLicense(name); delTb.Text=""
+			notify("Лицензия удалена: " .. name, Color3.fromRGB(200,80,80))
+			refreshResult(name)
+		end)
+	end
 end
 
 -- ══════════════════════════════════════════
@@ -1566,27 +1839,33 @@ local function createTrail()
 	trail.Lifetime = 0.7; trail.MinLength = 0; trail.Parent = root
 end
 
--- Bot ESP в отдельном потоке
+-- Bot ESP — сканируем только GetChildren (не GetDescendants) каждые 2с
+local botESPCache = {}
 task.spawn(function()
-	while true do task.wait(0.5)
-		if State.BotESP then
+	while true do
+		task.wait(2)
+		if not State.BotESP then
+			-- Очищаем кэш и подсветки
+			for _, model in ipairs(botESPCache) do
+				if model and model.Parent then
+					local h = model:FindFirstChild("_BotHL"); if h then h:Destroy() end
+				end
+			end
+			botESPCache = {}
+		else
 			local char = getChar()
 			local playerChars = {}
 			for _, p in ipairs(Players:GetPlayers()) do
 				if p.Character then playerChars[p.Character] = true end
 			end
-			-- Ищем все модели с Humanoid в workspace (включая папки)
-			for _, model in ipairs(workspace:GetDescendants()) do
+			botESPCache = {}
+			for _, model in ipairs(workspace:GetChildren()) do
 				if model:IsA("Model") and model ~= char and not playerChars[model] then
 					if model:FindFirstChildOfClass("Humanoid") then
 						ensureHL(model, "_BotHL", Color3.fromRGB(255,60,60), Color3.fromRGB(255,120,120))
+						table.insert(botESPCache, model)
 					end
 				end
-			end
-		else
-			-- Убираем подсветку если выключено
-			for _, d in ipairs(workspace:GetDescendants()) do
-				if d:IsA("Highlight") and d.Name == "_BotHL" then d:Destroy() end
 			end
 		end
 	end
