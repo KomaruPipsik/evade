@@ -1664,34 +1664,65 @@ do
 		end
 		local root = getChar() and getChar():FindFirstChild("HumanoidRootPart")
 		if not root then return end
-		local spawnPos = root.Position + Vector3.new(0,500,0)
+		local base = root.Position + Vector3.new(0, 500, 0)
 
 		local mapModel = Instance.new("Model"); mapModel.Name = "_APSpawnedMap"; mapModel.Parent = workspace
 
-		-- Простое обби: 10 платформ
-		local function makePlatform(cf, w, h, d, col)
-			local p = Instance.new("Part"); p.Anchored = true
-			p.Size = Vector3.new(w,h,d); p.CFrame = cf
-			p.BrickColor = BrickColor.new(col or "Medium stone grey")
-			p.Material = Enum.Material.SmoothPlastic
+		local function mkPart(pos, size, color, mat, shape)
+			local p = Instance.new("Part")
+			p.Anchored = true; p.CanCollide = true
+			p.Shape = shape or Enum.PartType.Block
+			p.Size = size; p.Position = pos
+			p.BrickColor = BrickColor.new(color or "Medium stone grey")
+			p.Material = mat or Enum.Material.SmoothPlastic
 			p.Parent = mapModel; return p
 		end
 
 		-- Стартовая платформа
-		makePlatform(CFrame.new(spawnPos), 12, 2, 12, "Bright green")
-		-- Несколько прыгательных блоков
-		local offsets = {
-			{10,3,0}, {22,6,0}, {34,10,5}, {46,14,0}, {56,18,-5},
-			{68,22,0}, {80,26,5}, {92,30,0}, {104,34,0}, {116,38,0}
+		mkPart(base, Vector3.new(16,2,16), "Bright green", Enum.Material.Grass)
+
+		-- Основной путь с разными платформами
+		local path = {
+			{12,4,0,  8,2,8,  "Bright blue"},
+			{26,8,0,  6,2,6,  "Bright red"},
+			{38,12,5, 8,2,8,  "Bright yellow"},
+			{52,16,0, 6,2,6,  "Cyan"},
+			{64,20,-5,8,2,8,  "Lime green"},
+			{78,24,0, 6,2,6,  "Hot pink"},
+			{92,28,5, 8,2,8,  "Bright orange"},
+			{106,32,0,6,2,6,  "Bright violet"},
+			{120,36,0,8,2,8,  "Bright blue"},
+			{134,40,0,6,2,6,  "Teal"},
+			{148,44,0,10,2,10,"Gold"},
 		}
-		for _, o in ipairs(offsets) do
-			makePlatform(CFrame.new(spawnPos + Vector3.new(o[1],o[2],o[3])), 8,2,8, "Bright blue")
+		for _, d in ipairs(path) do
+			mkPart(base + Vector3.new(d[1],d[2],d[3]), Vector3.new(d[4],d[5],d[6]), d[7])
 		end
-		-- Финальная платформа
-		makePlatform(CFrame.new(spawnPos + Vector3.new(130,42,0)), 14,2,14, "Bright yellow")
+
+		-- Шарики-препятствия (сферы)
+		local ballPositions = {
+			{20,7,0}, {44,15,0}, {70,23,0}, {98,31,0}, {125,39,0}
+		}
+		for _, bp in ipairs(ballPositions) do
+			local ball = mkPart(
+				base + Vector3.new(bp[1], bp[2]+2, bp[3]),
+				Vector3.new(5,5,5), "Really red", Enum.Material.Neon,
+				Enum.PartType.Ball)
+			ball.Anchored = true
+		end
+
+		-- Узкий мост (тонкие платформы)
+		for i = 0, 5 do
+			mkPart(base + Vector3.new(58+i*4, 17, 0), Vector3.new(3,1,3), "White")
+		end
+
+		-- Финальная большая платформа
+		local final = mkPart(base + Vector3.new(162,46,0), Vector3.new(20,2,20), "Bright yellow", Enum.Material.Neon)
+		-- Знак победы
+		mkPart(base + Vector3.new(162,49,0), Vector3.new(2,6,2), "Gold", Enum.Material.Neon)
 
 		spawnedMap = mapModel
-		notify("Карта заспавнена! 500 блоков вверх", Color3.fromRGB(80,180,255))
+		notify("Обби заспавнено! +500 блоков вверх ⬆", Color3.fromRGB(80,180,255))
 	end, 111)
 
 	makeMapBtn(f, "🚀  Телепорт на карту", Color3.fromRGB(30,120,80), function()
@@ -1896,15 +1927,24 @@ local function getFovZoom()
 	return _fovZoom
 end
 
+local _origFOV = nil  -- сохраняем оригинальный FOV для восстановления
+
 RunService.RenderStepped:Connect(function()
+	local cam = workspace.CurrentCamera
+	if not cam then return end
 	if State.FOVChanged then
+		-- Сохраняем оригинал один раз
+		if not _origFOV then _origFOV = 70 end
+		-- Устанавливаем напрямую FieldOfView (Zoom ограничен ~94°, FieldOfView нет)
+		cam.FieldOfView = CONFIG.FOV
+		-- Также пробуем Zoom для совместимости
 		local zoom = getFovZoom()
-		if zoom then
-			zoom.Value = CONFIG.FOV / 70  -- Zoom=1 это стандарт 70°
-		else
-			local cam = workspace.CurrentCamera
-			if cam then cam.FieldOfView = CONFIG.FOV end
-		end
+		if zoom then zoom.Value = math.clamp(CONFIG.FOV / 70, 0.1, 5) end
+	else
+		-- Восстанавливаем при выключении
+		if _origFOV then cam.FieldOfView = _origFOV end
+		local zoom = getFovZoom()
+		if zoom then zoom.Value = 1 end
 	end
 end)
 
@@ -2006,7 +2046,8 @@ task.spawn(function()
 	end
 end)
 
--- Кэшируем RaycastParams один разlocal _rayParamsChar = RaycastParams.new()
+-- Кэшируем RaycastParams один раз
+local _rayParamsChar = RaycastParams.new()
 _rayParamsChar.FilterType = Enum.RaycastFilterType.Exclude
 
 -- Player ESP / Distance в отдельном медленном цикле (не каждый кадр!)
@@ -2049,9 +2090,10 @@ RunService.Heartbeat:Connect(function(dt)
 		table.insert(RecordedFrames, {CFrame = root.CFrame, dt = dt})
 	end
 
-	-- Авто-прыжок
-	if State.AutoJump and hum.FloorMaterial ~= Enum.Material.Air then
-		local ray = workspace:Raycast(root.Position, Vector3.new(0,-CONFIG.AutoJumpThreshold,0), _rayParamsChar)
+	-- Авто-прыжок от пола (срабатывает когда почти касаешься земли — в воздухе ИЛИ на полу)
+	if State.AutoJump then
+		_rayParamsChar.FilterDescendantsInstances = {char}
+		local ray = workspace:Raycast(root.Position, Vector3.new(0, -CONFIG.AutoJumpThreshold, 0), _rayParamsChar)
 		if ray then
 			hum:ChangeState(Enum.HumanoidStateType.Jumping)
 			root.AssemblyLinearVelocity = Vector3.new(
@@ -2059,8 +2101,8 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 
-	-- Slope Bounce (только если в воздухе — экономим raycast на земле)
-	if State.SlopeBounce and hum.FloorMaterial == Enum.Material.Air then
+	-- Slope Bounce
+	if State.SlopeBounce then
 		_rayParamsChar.FilterDescendantsInstances = {char}
 		local vel = root.AssemblyLinearVelocity
 		local checkDist = CONFIG.SlopeBounceCheckDist
@@ -2138,6 +2180,41 @@ end)
 
 -- Input Handler
 UserInputService.InputBegan:Connect(function(inp, gpe)
+	-- Авто Дэш - проверяем ДО gpe, чтобы игра не блокировала
+	local DASH = _G._AP_DASH
+	if DASH and DASH.enabled and DASH.bind and DASH.bind.type == "key" and inp.KeyCode == DASH.bind.value then
+		task.spawn(function()
+			local char2 = getChar()
+			local hum2  = char2 and char2:FindFirstChild("Humanoid")
+			local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
+			if not hum2 or not root2 then return end
+			hum2:ChangeState(Enum.HumanoidStateType.Jumping)
+			if DASH.noFloor then
+				root2.AssemblyLinearVelocity = Vector3.new(
+					root2.AssemblyLinearVelocity.X,
+					math.max(root2.AssemblyLinearVelocity.Y, CONFIG.AutoJumpHeight),
+					root2.AssemblyLinearVelocity.Z)
+			end
+			task.wait(0.06)
+			local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
+			if ok and vim then
+				local function vk(d,k) pcall(function() vim:SendKeyEvent(d,k,false,game) end) end
+				vk(true, Enum.KeyCode.LeftControl); task.wait(0.05)
+				vk(true, Enum.KeyCode.G);           task.wait(0.06)
+				vk(false,Enum.KeyCode.G);           task.wait(0.05)
+				local dkeys={Enum.KeyCode.One,Enum.KeyCode.Two,Enum.KeyCode.Three,
+					Enum.KeyCode.Four,Enum.KeyCode.Five,Enum.KeyCode.Six}
+				local dk=dkeys[DASH.digit]
+				if dk then vk(true,dk); task.wait(0.05); vk(false,dk) end
+				task.wait(0.05); vk(false,Enum.KeyCode.LeftControl)
+				notify("Дэш! Слот "..DASH.digit, Color3.fromRGB(255,160,40))
+			else
+				notify("Дэш: прыжок (VIM недоступен)", Color3.fromRGB(255,160,40))
+			end
+		end)
+		return
+	end
+
 	if gpe then return end
 
 	-- M → разблокировать/заблокировать курсор  (теперь J)
@@ -2176,56 +2253,6 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
 	if tryToggle("InfiniteJump","InfiniteJump") then return end
 	if tryToggle("BunnyHop","BunnyHop") then return end
 	if tryToggle("SlopeBounce","SlopeBounce") then return end
-
-	-- Авто Дэш
-	local DASH = _G._AP_DASH
-	if DASH and DASH.enabled and DASH.bind and inp.KeyCode == DASH.bind then
-		task.spawn(function()
-			local char2 = getChar()
-			local hum2  = char2 and char2:FindFirstChild("Humanoid")
-			local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
-			if not hum2 or not root2 then return end
-
-			-- Прыжок (всегда, независимо от noFloor)
-			hum2:ChangeState(Enum.HumanoidStateType.Jumping)
-			if DASH.noFloor then
-				root2.AssemblyLinearVelocity = Vector3.new(
-					root2.AssemblyLinearVelocity.X,
-					math.max(root2.AssemblyLinearVelocity.Y, CONFIG.AutoJumpHeight),
-					root2.AssemblyLinearVelocity.Z)
-			end
-
-			task.wait(0.06)
-
-			-- Ctrl + G + цифра через VirtualInputManager
-			local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
-			if ok and vim then
-				local function vk(down, key)
-					pcall(function() vim:SendKeyEvent(down, key, false, game) end)
-				end
-				vk(true,  Enum.KeyCode.LeftControl)
-				task.wait(0.05)
-				vk(true,  Enum.KeyCode.G)
-				task.wait(0.06)
-				vk(false, Enum.KeyCode.G)
-				task.wait(0.05)
-				local digitKeys = {
-					Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three,
-					Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six
-				}
-				local dk = digitKeys[DASH.digit]
-				if dk then
-					vk(true,  dk); task.wait(0.05); vk(false, dk)
-				end
-				task.wait(0.05)
-				vk(false, Enum.KeyCode.LeftControl)
-				notify("Дэш! Слот " .. DASH.digit, Color3.fromRGB(255,160,40))
-			else
-				notify("Дэш: прыжок выполнен (VIM недоступен)", Color3.fromRGB(255,160,40))
-			end
-		end)
-		return
-	end
 
 	-- Стоп реплея
 	if bindMatches(Keybinds["StopReplay"], inp) and ReplayActive then
