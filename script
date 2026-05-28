@@ -1660,7 +1660,8 @@ do
 						local ox = part:GetAttribute("_APOrigSizeX") or part.Size.X
 						local oy = part:GetAttribute("_APOrigSizeY") or part.Size.Y
 						local oz = part:GetAttribute("_APOrigSizeZ") or part.Size.Z
-						part.Size = Vector3.new(ox*scale, oy*scale, oz*scale)
+						-- Только ширина и длина (X и Z), высота (Y) не меняется
+						part.Size = Vector3.new(ox*scale, oy, oz*scale)
 
 						-- Визуальный хитбокс
 						if showBoxes then
